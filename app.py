@@ -29,7 +29,7 @@ except Exception as e:
 
 # ==================== 🔒 密碼登入驗證保護 ====================
 # 您可以隨時在此修改您的存取密碼
-CORRECT_PASSWORD = "cmuh2026"
+CORRECT_PASSWORD = "14789"
 
 if "authenticated" not in st.session_state:
     st.session_state["authenticated"] = False
