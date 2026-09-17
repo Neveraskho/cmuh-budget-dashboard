@@ -27,7 +27,29 @@ except Exception as e:
     st.error(f"讀取 Excel 檔案發生錯誤: {e}")
     st.stop()
 
-# 初始化 Session State 用於即時記帳
+# ==================== 🔒 密碼登入驗證保護 ====================
+# 您可以隨時在此修改您的存取密碼
+CORRECT_PASSWORD = "cmuh2026"
+
+if "authenticated" not in st.session_state:
+    st.session_state["authenticated"] = False
+
+if not st.session_state["authenticated"]:
+    st.title("🔒 範疇一經費管理系統 - 請先登入")
+    st.markdown("本系統包含計畫經費機敏資料，請輸入存取密碼以繼續。")
+    
+    password_input = st.text_input("請輸入系統訪問密碼：", type="password")
+    
+    if st.button("登入系統"):
+        if password_input == CORRECT_PASSWORD:
+            st.session_state["authenticated"] = True
+            st.rerun()
+        else:
+            st.error("❌ 密碼錯誤，請重新輸入。")
+            
+    st.stop() # 尚未登入前，停止載入後續的儀表板畫面
+
+# ==================== 初始化 Session State 用於即時記帳 ====================
 if 'new_expenses' not in st.session_state:
     st.session_state['new_expenses'] = []
 
@@ -326,26 +348,3 @@ elif menu == "➕ 新增記帳":
 
 st.markdown("---")
 st.markdown("<p style='text-align: center; color: gray;'>範疇一經費管理系統面板 | Powered by Streamlit & Pandas</p>", unsafe_allow_html=True)
-# ==================== 密碼登入驗證保護 ====================
-# 設定你的密碼（可以自行修改字串）
-CORRECT_PASSWORD = "14789" 
-
-# 檢查是否已通過驗證
-if "authenticated" not in st.session_state:
-    st.session_state["authenticated"] = False
-
-if not st.session_state["authenticated"]:
-    st.title("🔒 範疇一經費管理系統 - 請先登入")
-    st.markdown("本系統包含計畫經費機敏資料，請輸入存取密碼以繼續。")
-    
-    password_input = st.text_input("請輸入系統訪問密碼：", type="password")
-    
-    if st.button("登入系統"):
-        if password_input == CORRECT_PASSWORD:
-            st.session_state["authenticated"] = True
-            st.rerun()
-        else:
-            st.error("❌ 密碼錯誤，請重新輸入。")
-    
-    # 停止執行後續的儀表板程式碼，直到解鎖為止
-    st.stop()
