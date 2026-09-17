@@ -52,24 +52,33 @@ total_pending = excel_pending_sum
 # 自動計算 E 欄「可沖帳額度」總和
 total_chongzhang_quota = all_details[chongzhang_amt_col].sum()
 
+# 計算剩餘未沖帳金額
+remaining_unreimbursed = total_pending - total_chongzhang_quota
+
 # ==================== 頂部核心經費看板 ====================
 st.subheader("📌 核心經費總覽看板")
 
-col1, col2, col3 = st.columns(3)
+col1, col2, col3, col4 = st.columns(4)
 with col1:
     st.metric("範疇一總經費上限", "NT$ 85,447,167")
 with col2:
     st.metric("人事費總預算 (經常門)", "NT$ 48,124,541", "穩定執行中")
 with col3:
-    st.metric("業務費總預算 (含租金/經常門)", "NT$ 19,051,087")
-
-col4, col5, col6 = st.columns(3)
+    st.metric("業務費總預算 (含租金)", "NT$ 19,051,087")
 with col4:
     st.metric("資本門總預算", "NT$ 18,271,539")
+
+st.markdown("")
+
+# 獨立隔開的沖帳追蹤看板
+st.subheader("📌 經費沖帳進度追蹤看板")
+col5, col6, col7 = st.columns(3)
 with col5:
-    st.metric("⏳ 待沖帳項目總額", f"NT$ {total_pending:,.0f}", delta_color="inverse")
+    st.metric("⏳ 待沖帳項目總額", f"NT$ {total_pending:,.0f}")
 with col6:
     st.metric("🔍 已沖帳總額 (E欄加總)", f"NT$ {total_chongzhang_quota:,.0f}")
+with col7:
+    st.metric("📊 剩餘未沖帳金額", f"NT$ {remaining_unreimbursed:,.0f}", delta_color="inverse")
 
 st.markdown("---")
 
