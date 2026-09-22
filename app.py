@@ -251,22 +251,20 @@ elif menu == "💵 經常門統計 (含人事費與業務費)":
     
     st.markdown("---")
     
-    # 新增：四大租金專案核銷與比例追蹤區塊
-    st.subheader("🏢 三、業務費 - 四大租金專案執行與核銷比例追蹤")
-    st.markdown("精準掌握四大租金子項目的預算、已核銷金額與執行進度比例：")
+    # 新增：四大租金專案核銷與月份追蹤區塊
+    st.subheader("🏢 三、業務費 - 四大租金專案執行與已核銷月份追蹤")
+    st.markdown("掌握四大租金子項目的預算、已核銷金額、執行進度比例以及**已核銷月份明細**：")
     
-    # 計算已核銷租金（從明細或租金表抓取，此處計算實際手術室排程已核銷 371,694，其餘暫為 0）
-    # 手術智慧排程已核銷總額 = 371694 (對應 df_rent 總計或實際核銷)
     rent_tracking_data = [
-        ["目標3-AI機器人引進 (AI照護型)", 13642989.0, 0.0, "機器人使用租金 (50台 * 5.7個月)[cite: 1]"],
-        ["目標2-手術室排程預測與管理系統", 1757098.0, 371694.0, "手術室排程預測與管理系統租金[cite: 1]"],
-        ["目標1-員工智管家 App", 3163132.0, 0.0, "員工智管家 App 租金[cite: 1]"],
-        ["目標2-急診室AI檢傷分類戰情室", 226668.0, 0.0, "急診室AI檢傷分類戰情室租金[cite: 1]"]
+        ["目標3-AI機器人引進 (AI照護型)", 13642989.0, 0.0, "尚無", "機器人使用租金 (50台 * 5.7個月)[cite: 1]"],
+        ["目標2-手術室排程預測與管理系統", 1757098.0, 371694.0, "115.07 (部分), 115.08", "手術室排程預測與管理系統租金[cite: 1]"],
+        ["目標1-員工智管家 App", 3163132.0, 0.0, "尚無", "員工智管家 App 租金[cite: 1]"],
+        ["目標2-急診室AI檢傷分類戰情室", 226668.0, 0.0, "尚無", "急診室AI檢傷分類戰情室租金[cite: 1]"]
     ]
     
     rent_stats = []
     for row in rent_tracking_data:
-        name, b_val, s_val, desc = row
+        name, b_val, s_val, months, desc = row
         rem_val = b_val - s_val
         prog = (s_val / b_val * 100) if b_val > 0 else 0
         rent_stats.append({
@@ -274,6 +272,7 @@ elif menu == "💵 經常門統計 (含人事費與業務費)":
             '預算金額 (A)': f"NT$ {b_val:,.2f}" if b_val % 1 != 0 else f"NT$ {b_val:,.0f}",
             '已核銷金額 (B)': f"NT$ {s_val:,.2f}" if s_val % 1 != 0 else f"NT$ {s_val:,.0f}",
             '剩餘可用額度 (C)': f"NT$ {rem_val:,.2f}" if rem_val % 1 != 0 else f"NT$ {rem_val:,.0f}",
+            '已核銷月份': months,
             '核銷執行進度 (%)': f"{prog:.2f}%",
             '說明': desc
         })
@@ -290,7 +289,6 @@ elif menu == "💵 經常門統計 (含人事費與業務費)":
     
     for item_name, b_amt in budget_dict.items():
         spent = actual_spent.get(item_name, 0.0)
-        # 如果是租金，把已核銷的 371694 納入計算
         if item_name == '租金':
             spent = max(spent, 371694.0)
         remaining = b_amt - spent
