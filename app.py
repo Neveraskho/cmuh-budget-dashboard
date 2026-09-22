@@ -28,8 +28,7 @@ except Exception as e:
     st.stop()
 
 # ==================== 🔒 密碼登入驗證保護 ====================
-# 您可以隨時在此修改您的存取密碼
-CORRECT_PASSWORD = "14789"
+CORRECT_PASSWORD = "14379"
 
 if "authenticated" not in st.session_state:
     st.session_state["authenticated"] = False
@@ -47,7 +46,7 @@ if not st.session_state["authenticated"]:
         else:
             st.error("❌ 密碼錯誤，請重新輸入。")
             
-    st.stop() # 尚未登入前，停止載入後續的儀表板畫面
+    st.stop()
 
 # ==================== 初始化 Session State 用於即時記帳 ====================
 if 'new_expenses' not in st.session_state:
@@ -126,7 +125,6 @@ if menu == "📌 總體經費摘要與支用比例":
     total_remaining = total_budget - total_spent
     total_progress = (total_spent / total_budget * 100) if total_budget > 0 else 0
 
-    # 產生自訂 HTML 表格（完美靠右對齊數字與會計格式）
     html_table = f"""
     <style>
     .accounting-table {{
@@ -150,7 +148,7 @@ if menu == "📌 總體經費摘要與支用比例":
         text-align: left;
     }}
     .accounting-table th:nth-child(n+2), .accounting-table td:nth-child(n+2) {{
-        text-align: right; /* 第二欄開始全部靠右對齊 */
+        text-align: right;
     }}
     .accounting-table tr:hover {{
         background-color: #f8f9fa;
@@ -222,7 +220,7 @@ if menu == "📌 總體經費摘要與支用比例":
 # 2. 經常門統計 (含人事費跟業務費)
 elif menu == "💵 經常門統計 (含人事費與業務費)":
     st.header("💵 經常門經費統計 (含人事費與業務費/租金)")
-    st.markdown("依據支用標準，經常門包含**人事費**與**業務費**（租金歸類於業務費下）。")
+    st.markdown("依據支用標準，經常門包含**人事費**與**業務費**（租金歸類於業務費下）[cite: 1]。")
     
     st.subheader("👤 一、人事費支用與預算標準 (總預算: NT$ 48,124,541)")
     personnel_data = [
@@ -237,11 +235,11 @@ elif menu == "💵 經常門統計 (含人事費與業務費)":
     
     st.subheader("📝 二、業務費與租金編列標準明細 (總預算: NT$ 19,051,087)")
     business_data = [
-        ["租金", "NT$ 47,789", "台/月", "285.5", "NT$ 13,642,989", "目標3-AI機器人引進：機器人使用租金(AI照護型)*50台*5.7個月"],
-        ["租金", "NT$ 349,167", "月", "5.0", "NT$ 1,757,098", "目標2-人工智慧模型：手術室排程預測與管理系統租金"],
-        ["租金", "NT$ 685,714", "月", "4.6", "NT$ 3,163,132", "目標1-建置員工智管家App：員工智管家App租金"],
-        ["租金", "NT$ 56,667", "月", "4", "NT$ 226,668", "目標2-人工智慧模型：急診室AI檢傷分類戰情室租金"],
-        ["餐費", "NT$ 140", "人", "-", "NT$ 130,000", "範疇一每月2次會議，各範疇會議30人*140元*2次*15個月"],
+        ["租金", "NT$ 47,789", "台/月", "285.5", "NT$ 13,642,989", "目標3-AI機器人引進：機器人使用租金(AI照護型)*50台*5.7個月[cite: 1]"],
+        ["租金", "NT$ 349,167", "月", "5.0", "NT$ 1,757,098", "目標2-人工智慧模型：手術室排程預測與管理系統租金[cite: 1]"],
+        ["租金", "NT$ 685,714", "月", "4.6", "NT$ 3,163,132", "目標1-建置員工智管家App：員工智管家App租金[cite: 1]"],
+        ["租金", "NT$ 56,667", "月", "4", "NT$ 226,668", "目標2-人工智慧模型：急診室AI檢傷分類戰情室租金[cite: 1]"],
+        ["餐費", "NT$ 140", "人", "-", "NT$ 130,000", "範疇一每月2次會議，各範疇會議30人*140元*2次*15個月[cite: 1]"],
         ["雜支費", "-", "-", "-", "NT$ 20,000", "執行本計畫相關雜項支出"],
         ["文具紙張", "-", "批", "1", "NT$ 7,000", "執行計畫所需油墨、碳粉匣、紙張、文具等費用"],
         ["印刷", "-", "批", "1", "NT$ 10,000", "執行計畫所需書表影印、印裝費"],
@@ -253,7 +251,38 @@ elif menu == "💵 經常門統計 (含人事費與業務費)":
     
     st.markdown("---")
     
-    st.subheader("📊 三、業務費各細項實際執行狀況與餘額統計")
+    # 新增：四大租金專案核銷與比例追蹤區塊
+    st.subheader("🏢 三、業務費 - 四大租金專案執行與核銷比例追蹤")
+    st.markdown("精準掌握四大租金子項目的預算、已核銷金額與執行進度比例：")
+    
+    # 計算已核銷租金（從明細或租金表抓取，此處計算實際手術室排程已核銷 371,694，其餘暫為 0）
+    # 手術智慧排程已核銷總額 = 371694 (對應 df_rent 總計或實際核銷)
+    rent_tracking_data = [
+        ["目標3-AI機器人引進 (AI照護型)", 13642989.0, 0.0, "機器人使用租金 (50台 * 5.7個月)[cite: 1]"],
+        ["目標2-手術室排程預測與管理系統", 1757098.0, 371694.0, "手術室排程預測與管理系統租金[cite: 1]"],
+        ["目標1-員工智管家 App", 3163132.0, 0.0, "員工智管家 App 租金[cite: 1]"],
+        ["目標2-急診室AI檢傷分類戰情室", 226668.0, 0.0, "急診室AI檢傷分類戰情室租金[cite: 1]"]
+    ]
+    
+    rent_stats = []
+    for row in rent_tracking_data:
+        name, b_val, s_val, desc = row
+        rem_val = b_val - s_val
+        prog = (s_val / b_val * 100) if b_val > 0 else 0
+        rent_stats.append({
+            '租金專案項目': name,
+            '預算金額 (A)': f"NT$ {b_val:,.2f}" if b_val % 1 != 0 else f"NT$ {b_val:,.0f}",
+            '已核銷金額 (B)': f"NT$ {s_val:,.2f}" if s_val % 1 != 0 else f"NT$ {s_val:,.0f}",
+            '剩餘可用額度 (C)': f"NT$ {rem_val:,.2f}" if rem_val % 1 != 0 else f"NT$ {rem_val:,.0f}",
+            '核銷執行進度 (%)': f"{prog:.2f}%",
+            '說明': desc
+        })
+    df_rent_tracking = pd.DataFrame(rent_stats)
+    st.dataframe(df_rent_tracking, use_container_width=True)
+
+    st.markdown("---")
+    
+    st.subheader("📊 四、業務費各細項實際執行狀況與餘額統計")
     actual_spent = all_details.groupby(cat_col)[total_amt_col].sum().to_dict()
     
     biz_stats = []
@@ -261,6 +290,9 @@ elif menu == "💵 經常門統計 (含人事費與業務費)":
     
     for item_name, b_amt in budget_dict.items():
         spent = actual_spent.get(item_name, 0.0)
+        # 如果是租金，把已核銷的 371694 納入計算
+        if item_name == '租金':
+            spent = max(spent, 371694.0)
         remaining = b_amt - spent
         progress = (spent / b_amt * 100) if b_amt > 0 else 0
         biz_stats.append({
@@ -282,7 +314,7 @@ elif menu == "💵 經常門統計 (含人事費與業務費)":
 # 3. 資本門統計
 elif menu == "🏢 資本門統計":
     st.header("🏢 資本門經費統計與設備採購追蹤")
-    st.markdown("依據支用標準，資本門編列以百分之三十為上限，主要用於設備購置與裝置。")
+    st.markdown("依據支用標準，資本門編列以百分之三十為上限，主要用於設備購置與裝置[cite: 1]。")
     
     cap_df = df_capital.iloc[1:5, [0, 1, 2, 3, 4, 5, 6, 7, 8]].copy()
     cap_df.columns = ['發票開立日期', '發票號碼', '品名', '數量', '單價', '總計(含稅)', '核銷單列印日期', '核銷案號', '說明/備註']
