@@ -28,7 +28,7 @@ except Exception as e:
     st.stop()
 
 # ==================== 🔒 密碼登入驗證保護 ====================
-CORRECT_PASSWORD = "14789"
+CORRECT_PASSWORD = "14379"
 
 if "authenticated" not in st.session_state:
     st.session_state["authenticated"] = False
