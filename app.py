@@ -28,7 +28,7 @@ except Exception as e:
     st.stop()
 
 # ==================== 🔒 密碼登入驗證保護 ====================
-CORRECT_PASSWORD = "14379"
+CORRECT_PASSWORD = "14789"
 
 if "authenticated" not in st.session_state:
     st.session_state["authenticated"] = False
@@ -251,10 +251,7 @@ elif menu == "💵 經常門統計 (含人事費與業務費)":
     
     st.markdown("---")
     
-    # 新增：四大租金專案核銷與月份追蹤區塊
     st.subheader("🏢 三、業務費 - 四大租金專案執行與已核銷月份追蹤")
-    st.markdown("掌握四大租金子項目的預算、已核銷金額、執行進度比例以及**已核銷月份明細**：")
-    
     rent_tracking_data = [
         ["目標3-AI機器人引進 (AI照護型)", 13642989.0, 0.0, "尚無", "機器人使用租金 (50台 * 5.7個月)[cite: 1]"],
         ["目標2-手術室排程預測與管理系統", 1757098.0, 371694.0, "115.07 (部分), 115.08", "手術室排程預測與管理系統租金[cite: 1]"],
@@ -312,8 +309,36 @@ elif menu == "💵 經常門統計 (含人事費與業務費)":
 # 3. 資本門統計
 elif menu == "🏢 資本門統計":
     st.header("🏢 資本門經費統計與設備採購追蹤")
-    st.markdown("依據支用標準，資本門編列以百分之三十為上限，主要用於設備購置與裝置[cite: 1]。")
+    st.markdown("依據 115.08 經費標準，資本門總預算為 **NT$ 18,271,539**[cite: 1]，以下為 6 大合併項目之經費清單與核銷進度比例：")
     
+    # 6個合併項目（不分尾款或簽約款合併）
+    capital_tracking_data = [
+        ["AI排班與加班預測系統", 3570000.0, 2856000.0, "包含30%簽約金與70%尾款（已核銷簽約金與第一、二階段）"],
+        ["定位點班系統", 1960000.0, 588000.0, "加護病房設備室內定位系統建置案（第一期已核銷）"],
+        ["iListen員工脈動平台", 720000.0, 0.0, "包含30%簽約與70%尾款（尚未核銷）"],
+        ["全自動掃描機", 3281539.0, 0.0, "數位病理專案所需（剩餘款由本院自籌）"],
+        ["智能磅秤", 740000.0, 0.0, "擴大科技投資降低工作負荷-智慧量測系統（50個）"],
+        ["ERP系統", 8000000.0, 0.0, "企業資源規劃系統：ERP系統"]
+    ]
+    
+    cap_stats = []
+    for row in capital_tracking_data:
+        name, b_val, s_val, desc = row
+        rem_val = b_val - s_val
+        prog = (s_val / b_val * 100) if b_val > 0 else 0
+        cap_stats.append({
+            '資本門專案項目': name,
+            '預算編列金額 (A)': f"NT$ {b_val:,.2f}" if b_val % 1 != 0 else f"NT$ {b_val:,.0f}",
+            '已核銷金額 (B)': f"NT$ {s_val:,.2f}" if s_val % 1 != 0 else f"NT$ {s_val:,.0f}",
+            '剩餘可用額度 (C)': f"NT$ {rem_val:,.2f}" if rem_val % 1 != 0 else f"NT$ {rem_val:,.0f}",
+            '核銷執行進度 (%)': f"{prog:.2f}%",
+            '備註說明': desc
+        })
+    df_cap_tracking = pd.DataFrame(cap_stats)
+    st.dataframe(df_cap_tracking, use_container_width=True)
+    
+    st.markdown("---")
+    st.subheader("📄 二、資本門原始發票與核銷流水明細")
     cap_df = df_capital.iloc[1:5, [0, 1, 2, 3, 4, 5, 6, 7, 8]].copy()
     cap_df.columns = ['發票開立日期', '發票號碼', '品名', '數量', '單價', '總計(含稅)', '核銷單列印日期', '核銷案號', '說明/備註']
     st.dataframe(cap_df, use_container_width=True)
