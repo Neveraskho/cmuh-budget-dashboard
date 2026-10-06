@@ -82,12 +82,12 @@ total_chongzhang_quota = all_details[chongzhang_amt_col].sum()
 # 計算剩餘未沖帳金額
 remaining_unreimbursed = total_pending - total_chongzhang_quota
 
-# 計算研究助理已核銷總額
+# 計算研究助理已核銷總額（正確排除標題與總計行）
 ra_budget = 484811.0
 if not df_personnel_biz.empty:
-    # 假設第三欄（索引2）為總計金額
     col_name_total = df_personnel_biz.columns[2]
-    valid_ra = df_personnel_biz[df_personnel_biz.iloc[:, 1].astype(str) != '總計']
+    # 僅選取實際月份資料列（排除標題列與總計列）
+    valid_ra = df_personnel_biz.iloc[1:9].copy()
     ra_spent = pd.to_numeric(valid_ra[col_name_total], errors='coerce').sum()
 else:
     ra_spent = 258443.0
@@ -268,7 +268,6 @@ elif menu == "💵 經常門統計 (含人事費與業務費)":
     st.markdown("### 📄 研究助理實際核銷流水明細表")
     if not df_personnel_biz.empty:
         display_ra_df = df_personnel_biz.copy()
-        # 自動將明細中的數字加上會計單位格式
         col_t = display_ra_df.columns[2]
         display_ra_df[col_t] = display_ra_df[col_t].apply(
             lambda x: f"NT$ {x:,.0f}" if pd.notnull(x) and isinstance(x, (int, float)) else x
