@@ -20,7 +20,6 @@ def load_data():
     df_capital = pd.read_excel(FILE_DETAIL, sheet_name='資本門')
     df_rent = pd.read_excel(FILE_DETAIL, sheet_name='業務費-租金')
     
-    # 嘗試讀取新增加的「業務費-人事費」分頁，若分頁不存在則給予空表
     try:
         df_personnel_biz = pd.read_excel(FILE_DETAIL, sheet_name='業務費-人事費')
     except Exception:
@@ -83,6 +82,18 @@ total_chongzhang_quota = all_details[chongzhang_amt_col].sum()
 # 計算剩餘未沖帳金額
 remaining_unreimbursed = total_pending - total_chongzhang_quota
 
+# 計算研究助理已核銷總額（從 df_personnel_biz 總計欄位或加總計算）
+ra_budget = 484811.0
+if not df_personnel_biz.empty and '總計' in df_personnel_biz.columns:
+    # 排除最後一行「總計」文字行若存在
+    valid_ra = df_personnel_biz[df_personnel_biz['項目'].astype(str) != '總計']
+    ra_spent = pd.to_numeric(valid_ra['總計'], errors='coerce').sum()
+else:
+    ra_spent = 258443.0
+
+ra_remaining = ra_budget - ra_spent
+ra_progress = (ra_spent / ra_budget * 100) if ra_budget > 0 else 0
+
 # ==================== 頂部核心經費看板 ====================
 st.subheader("📌 核心經費總覽看板")
 
@@ -124,7 +135,7 @@ menu = st.sidebar.radio("選擇功能模組", [
 if menu == "📌 總體經費摘要與支用比例":
     st.header("📌 總體經費執行摘要與支用比例")
     
-    p_spent = 258443.0  # 加入業務費-人事費實際已支用金額
+    p_spent = ra_spent
     b_spent = 519605.48
     c_spent = 3444000.00
     total_spent = p_spent + b_spent + c_spent
@@ -238,16 +249,35 @@ elif menu == "💵 經常門統計 (含人事費與業務費)":
     personnel_df = pd.DataFrame(personnel_data, columns=['項目', '單價', '單位', '數量', '合計 (NTD)', '支用說明或編列基準'])
     st.dataframe(personnel_df, use_container_width=True)
     
-    # 整合顯示：業務費-人事費細項清單
-    st.markdown("### 📋 業務費-人事費實際執行明細 (研究助理薪資與獎金)")
+    st.markdown("---")
+    
+    # 新增：單就研究助理經費核銷比例追蹤表（有紀錄即視為已核銷，並加上會計單位格式）
+    st.subheader("📋 二、研究助理經費核銷進度與比例追蹤")
+    st.markdown("單就碩士級研究助理項目（預算編列 NT$ 484,811），依據已記錄之薪資與獎金明細計算執行進度：")
+    
+    ra_tracking_df = pd.DataFrame([{
+        '項目': '碩士級研究助理 (薪資與三節獎金)',
+        '預算金額 (A)': f"NT$ {ra_budget:,.0f}",
+        '已核銷金額 (B)': f"NT$ {ra_spent:,.0f}",
+        '剩餘可用額度 (C)': f"NT$ {ra_remaining:,.0f}",
+        '核銷執行進度 (%)': f"{ra_progress:.2f}%",
+        '備註說明': '已將 3 月至 9 月研究助理薪資與三節獎金紀錄全數計入已核銷'
+    }])
+    st.dataframe(ra_tracking_df, use_container_width=True)
+    
+    st.markdown("### 📄 研究助理實際核銷流水明細表")
     if not df_personnel_biz.empty:
-        st.dataframe(df_personnel_biz, use_container_width=True)
+        # 格式化顯示會計數字
+        display_ra_df = df_personnel_biz.copy()
+        if '總計' in display_ra_df.columns:
+            display_ra_df['總計'] = display_ra_df['總計'].apply(lambda x: f"NT$ {x:,.0f}" if pd.notnull(x) and isinstance(x, (int, float)) else x)
+        st.dataframe(display_ra_df, use_container_width=True)
     else:
-        st.info("目前尚未偵測到「業務費-人事費」分頁資料，請確認 Excel 檔案是否已儲存。")
+        st.info("目前尚未偵測到「業務費-人事費」分頁資料。")
     
     st.markdown("---")
     
-    st.subheader("📝 二、業務費與租金編列標準明細 (總預算: NT$ 19,051,087)")
+    st.subheader("📝 三、業務費與租金編列標準明細 (總預算: NT$ 19,051,087)")
     business_data = [
         ["租金", "NT$ 47,789", "台/月", "285.5", "NT$ 13,642,989", "目標3-AI機器人引進：機器人使用租金(AI照護型)*50台*5.7個月[cite: 1]"],
         ["租金", "NT$ 349,167", "月", "5.0", "NT$ 1,757,098", "目標2-人工智慧模型：手術室排程預測與管理系統租金[cite: 1]"],
@@ -265,7 +295,7 @@ elif menu == "💵 經常門統計 (含人事費與業務費)":
     
     st.markdown("---")
     
-    st.subheader("🏢 三、業務費 - 四大租金專案執行與已核銷月份追蹤")
+    st.subheader("🏢 四、業務費 - 四大租金專案執行與已核銷月份追蹤")
     rent_tracking_data = [
         ["目標3-AI機器人引進 (AI照護型)", 13642989.0, 0.0, "尚無", "機器人使用租金 (50台 * 5.7個月)[cite: 1]"],
         ["目標2-手術室排程預測與管理系統", 1757098.0, 371694.0, "115.07 (部分), 115.08", "手術室排程預測與管理系統租金[cite: 1]"],
@@ -292,7 +322,7 @@ elif menu == "💵 經常門統計 (含人事費與業務費)":
 
     st.markdown("---")
     
-    st.subheader("📊 四、業務費各細項實際執行狀況與餘額統計")
+    st.subheader("📊 五、業務費各細項實際執行狀況與餘額統計")
     actual_spent = all_details.groupby(cat_col)[total_amt_col].sum().to_dict()
     
     biz_stats = []
