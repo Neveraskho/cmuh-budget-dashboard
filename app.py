@@ -82,12 +82,13 @@ total_chongzhang_quota = all_details[chongzhang_amt_col].sum()
 # 計算剩餘未沖帳金額
 remaining_unreimbursed = total_pending - total_chongzhang_quota
 
-# 計算研究助理已核銷總額（從 df_personnel_biz 總計欄位或加總計算）
+# 計算研究助理已核銷總額
 ra_budget = 484811.0
-if not df_personnel_biz.empty and '總計' in df_personnel_biz.columns:
-    # 排除最後一行「總計」文字行若存在
-    valid_ra = df_personnel_biz[df_personnel_biz['項目'].astype(str) != '總計']
-    ra_spent = pd.to_numeric(valid_ra['總計'], errors='coerce').sum()
+if not df_personnel_biz.empty:
+    # 假設第三欄（索引2）為總計金額
+    col_name_total = df_personnel_biz.columns[2]
+    valid_ra = df_personnel_biz[df_personnel_biz.iloc[:, 1].astype(str) != '總計']
+    ra_spent = pd.to_numeric(valid_ra[col_name_total], errors='coerce').sum()
 else:
     ra_spent = 258443.0
 
@@ -251,7 +252,6 @@ elif menu == "💵 經常門統計 (含人事費與業務費)":
     
     st.markdown("---")
     
-    # 新增：單就研究助理經費核銷比例追蹤表（有紀錄即視為已核銷，並加上會計單位格式）
     st.subheader("📋 二、研究助理經費核銷進度與比例追蹤")
     st.markdown("單就碩士級研究助理項目（預算編列 NT$ 484,811），依據已記錄之薪資與獎金明細計算執行進度：")
     
@@ -267,10 +267,12 @@ elif menu == "💵 經常門統計 (含人事費與業務費)":
     
     st.markdown("### 📄 研究助理實際核銷流水明細表")
     if not df_personnel_biz.empty:
-        # 格式化顯示會計數字
         display_ra_df = df_personnel_biz.copy()
-        if '總計' in display_ra_df.columns:
-            display_ra_df['總計'] = display_ra_df['總計'].apply(lambda x: f"NT$ {x:,.0f}" if pd.notnull(x) and isinstance(x, (int, float)) else x)
+        # 自動將明細中的數字加上會計單位格式
+        col_t = display_ra_df.columns[2]
+        display_ra_df[col_t] = display_ra_df[col_t].apply(
+            lambda x: f"NT$ {x:,.0f}" if pd.notnull(x) and isinstance(x, (int, float)) else x
+        )
         st.dataframe(display_ra_df, use_container_width=True)
     else:
         st.info("目前尚未偵測到「業務費-人事費」分頁資料。")
