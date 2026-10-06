@@ -19,10 +19,17 @@ def load_data():
     df_detail = pd.read_excel(FILE_DETAIL, sheet_name='明細表 ')
     df_capital = pd.read_excel(FILE_DETAIL, sheet_name='資本門')
     df_rent = pd.read_excel(FILE_DETAIL, sheet_name='業務費-租金')
-    return df_summary, df_detail, df_capital, df_rent
+    
+    # 嘗試讀取新增加的「業務費-人事費」分頁，若分頁不存在則給予空表
+    try:
+        df_personnel_biz = pd.read_excel(FILE_DETAIL, sheet_name='業務費-人事費')
+    except Exception:
+        df_personnel_biz = pd.DataFrame()
+        
+    return df_summary, df_detail, df_capital, df_rent, df_personnel_biz
 
 try:
-    df_summary, df_detail, df_capital, df_rent = load_data()
+    df_summary, df_detail, df_capital, df_rent, df_personnel_biz = load_data()
 except Exception as e:
     st.error(f"讀取 Excel 檔案發生錯誤: {e}")
     st.stop()
@@ -117,7 +124,7 @@ menu = st.sidebar.radio("選擇功能模組", [
 if menu == "📌 總體經費摘要與支用比例":
     st.header("📌 總體經費執行摘要與支用比例")
     
-    p_spent = 0.0
+    p_spent = 258443.0  # 加入業務費-人事費實際已支用金額
     b_spent = 519605.48
     c_spent = 3444000.00
     total_spent = p_spent + b_spent + c_spent
@@ -170,23 +177,23 @@ if menu == "📌 總體經費摘要與支用比例":
       <tr>
         <td>人事費 (經常門)</td>
         <td>NT$ 48,124,541</td>
-        <td>NT$ 0</td>
-        <td>NT$ 48,124,541</td>
-        <td>0.00%</td>
+        <td>NT$ {p_spent:,.2f}</td>
+        <td>NT$ {48124541 - p_spent:,.2f}</td>
+        <td>{(p_spent / 48124541 * 100):.2f}%</td>
       </tr>
       <tr>
         <td>業務費與租金 (經常門)</td>
         <td>NT$ 19,051,087.48</td>
-        <td>NT$ 519,605.48</td>
-        <td>NT$ 18,531,482</td>
-        <td>2.73%</td>
+        <td>NT$ {b_spent:,.2f}</td>
+        <td>NT$ {19051087.48 - b_spent:,.2f}</td>
+        <td>{(b_spent / 19051087.48 * 100):.2f}%</td>
       </tr>
       <tr>
         <td>資本門</td>
         <td>NT$ 18,271,539</td>
-        <td>NT$ 3,444,000</td>
-        <td>NT$ 14,827,539</td>
-        <td>18.85%</td>
+        <td>NT$ {c_spent:,.2f}</td>
+        <td>NT$ {18271539 - c_spent:,.2f}</td>
+        <td>{(c_spent / 18271539 * 100):.2f}%</td>
       </tr>
       <tr class="total-row">
         <td>📌 範疇一總經費合計</td>
@@ -212,7 +219,7 @@ if menu == "📌 總體經費摘要與支用比例":
         door_summary_bar = pd.DataFrame({
             '經費門類': ['人事費 (經常門)', '業務費與租金 (經常門)', '資本門'],
             '預算金額': [48124541.00, 19051087.48, 18271539.00],
-            '已支用/核銷金額': [0.0, 519605.48, 3444000.00]
+            '已支用/核銷金額': [p_spent, b_spent, c_spent]
         })
         fig_bar = px.bar(door_summary_bar, x='經費門類', y=['預算金額', '已支用/核銷金額'], barmode='group', title="三大經費門類預算與支用對比")
         st.plotly_chart(fig_bar, use_container_width=True)
@@ -230,6 +237,13 @@ elif menu == "💵 經常門統計 (含人事費與業務費)":
     ]
     personnel_df = pd.DataFrame(personnel_data, columns=['項目', '單價', '單位', '數量', '合計 (NTD)', '支用說明或編列基準'])
     st.dataframe(personnel_df, use_container_width=True)
+    
+    # 整合顯示：業務費-人事費細項清單
+    st.markdown("### 📋 業務費-人事費實際執行明細 (研究助理薪資與獎金)")
+    if not df_personnel_biz.empty:
+        st.dataframe(df_personnel_biz, use_container_width=True)
+    else:
+        st.info("目前尚未偵測到「業務費-人事費」分頁資料，請確認 Excel 檔案是否已儲存。")
     
     st.markdown("---")
     
@@ -311,7 +325,6 @@ elif menu == "🏢 資本門統計":
     st.header("🏢 資本門經費統計與設備採購追蹤")
     st.markdown("依據 115.08 經費標準，資本門總預算為 **NT$ 18,271,539**[cite: 1]，以下為 6 大合併項目之經費清單與核銷進度比例：")
     
-    # 6個合併項目（不分尾款或簽約款合併）
     capital_tracking_data = [
         ["AI排班與加班預測系統", 3570000.0, 2856000.0, "包含30%簽約金與70%尾款（已核銷簽約金與第一、二階段）"],
         ["定位點班系統", 1960000.0, 588000.0, "加護病房設備室內定位系統建置案（第一期已核銷）"],
