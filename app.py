@@ -82,11 +82,10 @@ total_chongzhang_quota = all_details[chongzhang_amt_col].sum()
 # 計算剩餘未沖帳金額
 remaining_unreimbursed = total_pending - total_chongzhang_quota
 
-# 計算研究助理已核銷總額（正確排除標題與總計行）
+# 計算研究助理已核銷總額
 ra_budget = 484811.0
 if not df_personnel_biz.empty:
     col_name_total = df_personnel_biz.columns[2]
-    # 僅選取實際月份資料列（排除標題列與總計列）
     valid_ra = df_personnel_biz.iloc[1:9].copy()
     ra_spent = pd.to_numeric(valid_ra[col_name_total], errors='coerce').sum()
 else:
@@ -94,6 +93,15 @@ else:
 
 ra_remaining = ra_budget - ra_spent
 ra_progress = (ra_spent / ra_budget * 100) if ra_budget > 0 else 0
+
+# 動態計算資本門各項目已核銷金額（從 df_capital 抓取）
+cap_df_raw = df_capital.iloc[1:6, [1, 2, 5]].copy()
+cap_df_raw.columns = ['發票號碼', '品名', '總計']
+cap_df_raw['總計'] = pd.to_numeric(cap_df_raw['總計'], errors='coerce').fillna(0)
+
+ai_spent = cap_df_raw[cap_df_raw['品名'].astype(str).str.contains('AI排班', na=False)]['總計'].sum()
+loc_spent = cap_df_raw[cap_df_raw['品名'].astype(str).str.contains('定位系統|定位點班', na=False)]['總計'].sum()
+total_cap_spent = cap_df_raw['總計'].sum()
 
 # ==================== 頂部核心經費看板 ====================
 st.subheader("📌 核心經費總覽看板")
@@ -138,7 +146,7 @@ if menu == "📌 總體經費摘要與支用比例":
     
     p_spent = ra_spent
     b_spent = 519605.48
-    c_spent = 3444000.00
+    c_spent = total_cap_spent
     total_spent = p_spent + b_spent + c_spent
     total_budget = 85447167.00
     total_remaining = total_budget - total_spent
@@ -354,11 +362,11 @@ elif menu == "💵 經常門統計 (含人事費與業務費)":
 # 3. 資本門統計
 elif menu == "🏢 資本門統計":
     st.header("🏢 資本門經費統計與設備採購追蹤")
-    st.markdown("依據 115.08 經費標準，資本門總預算為 **NT$ 18,271,539**[cite: 1]，以下為 6 大合併項目之經費清單與核銷進度比例：")
+    st.markdown("依據 115.08 經費標準，資本門總預算為 **NT$ 18,271,539**[cite: 1]，以下為 6 大合併項目之經費清單與核銷進度比例（數據自動聯動 Excel 資本門流水帳）：")
     
     capital_tracking_data = [
-        ["AI排班與加班預測系統", 3570000.0, 2856000.0, "包含30%簽約金與70%尾款（已核銷簽約金與第一、二階段）"],
-        ["定位點班系統", 1960000.0, 588000.0, "加護病房設備室內定位系統建置案（第一期已核銷）"],
+        ["AI排班與加班預測系統", 3570000.0, ai_spent, "包含30%簽約金、第一、二階段及第三階段(尾款)"],
+        ["定位點班系統", 1960000.0, loc_spent, "加護病房設備室內定位系統建置案（第一期已核銷）"],
         ["iListen員工脈動平台", 720000.0, 0.0, "包含30%簽約與70%尾款（尚未核銷）"],
         ["全自動掃描機", 3281539.0, 0.0, "數位病理專案所需（剩餘款由本院自籌）"],
         ["智能磅秤", 740000.0, 0.0, "擴大科技投資降低工作負荷-智慧量測系統（50個）"],
@@ -383,11 +391,13 @@ elif menu == "🏢 資本門統計":
     
     st.markdown("---")
     st.subheader("📄 二、資本門原始發票與核銷流水明細")
-    cap_df = df_capital.iloc[1:5, [0, 1, 2, 3, 4, 5, 6, 7, 8]].copy()
+    cap_df = df_capital.iloc[1:6, [0, 1, 2, 3, 4, 5, 6, 7, 8]].copy()
     cap_df.columns = ['發票開立日期', '發票號碼', '品名', '數量', '單價', '總計(含稅)', '核銷單列印日期', '核銷案號', '說明/備註']
+    # 將流水明細中的金額加上會計單位格式
+    cap_df['總計(含稅)'] = cap_df['總計(含稅)'].apply(lambda x: f"NT$ {x:,.0f}" if pd.notnull(x) and isinstance(x, (int, float)) else x)
     st.dataframe(cap_df, use_container_width=True)
     
-    st.metric("資本門已核銷總額", "NT$ 3,444,000")
+    st.metric("資本門已核銷總額", f"NT$ {total_cap_spent:,.0f}")
 
 # 4. 明細表
 elif menu == "📋 明細表":
