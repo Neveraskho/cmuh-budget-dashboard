@@ -94,7 +94,7 @@ else:
 ra_remaining = ra_budget - ra_spent
 ra_progress = (ra_spent / ra_budget * 100) if ra_budget > 0 else 0
 
-# 動態計算資本門各項目已核銷金額（從 df_capital 抓取）
+# 動態計算資本門各項目已核銷金額
 cap_df_raw = df_capital.iloc[1:6, [1, 2, 5]].copy()
 cap_df_raw.columns = ['發票號碼', '品名', '總計']
 cap_df_raw['總計'] = pd.to_numeric(cap_df_raw['總計'], errors='coerce').fillna(0)
@@ -102,6 +102,14 @@ cap_df_raw['總計'] = pd.to_numeric(cap_df_raw['總計'], errors='coerce').fill
 ai_spent = cap_df_raw[cap_df_raw['品名'].astype(str).str.contains('AI排班', na=False)]['總計'].sum()
 loc_spent = cap_df_raw[cap_df_raw['品名'].astype(str).str.contains('定位系統|定位點班', na=False)]['總計'].sum()
 total_cap_spent = cap_df_raw['總計'].sum()
+
+# 動態計算租金各項目已核銷金額（從 df_rent 抓取）
+rent_df_raw = df_rent.iloc[1:10, [1, 2, 5, 6, 7]].copy()
+rent_df_raw.columns = ['發票號碼', '品名', '總計', '核銷日期', '案號']
+rent_df_raw['總計'] = pd.to_numeric(rent_df_raw['總計'], errors='coerce').fillna(0)
+
+surgery_spent = rent_df_raw[rent_df_raw['品名'].astype(str).str.contains('手術智慧排程|手術室排程', na=False)]['總計'].sum()
+total_rent_spent = rent_df_raw['總計'].sum()
 
 # ==================== 頂部核心經費看板 ====================
 st.subheader("📌 核心經費總覽看板")
@@ -145,7 +153,7 @@ if menu == "📌 總體經費摘要與支用比例":
     st.header("📌 總體經費執行摘要與支用比例")
     
     p_spent = ra_spent
-    b_spent = 519605.48
+    b_spent = 130000 + 20000 + 7000 + 10000 + 90000 + 4200 + total_rent_spent
     c_spent = total_cap_spent
     total_spent = p_spent + b_spent + c_spent
     total_budget = 85447167.00
@@ -261,8 +269,6 @@ elif menu == "💵 經常門統計 (含人事費與業務費)":
     st.markdown("---")
     
     st.subheader("📋 二、研究助理經費核銷進度與比例追蹤")
-    st.markdown("單就碩士級研究助理項目（預算編列 NT$ 484,811），依據已記錄之薪資與獎金明細計算執行進度：")
-    
     ra_tracking_df = pd.DataFrame([{
         '項目': '碩士級研究助理 (薪資與三節獎金)',
         '預算金額 (A)': f"NT$ {ra_budget:,.0f}",
@@ -307,7 +313,7 @@ elif menu == "💵 經常門統計 (含人事費與業務費)":
     st.subheader("🏢 四、業務費 - 四大租金專案執行與已核銷月份追蹤")
     rent_tracking_data = [
         ["目標3-AI機器人引進 (AI照護型)", 13642989.0, 0.0, "尚無", "機器人使用租金 (50台 * 5.7個月)[cite: 1]"],
-        ["目標2-手術室排程預測與管理系統", 1757098.0, 371694.0, "115.07 (部分), 115.08", "手術室排程預測與管理系統租金[cite: 1]"],
+        ["目標2-手術室排程預測與管理系統", 1757098.0, surgery_spent, "115.07 ~ 115.10", "手術室排程預測與管理系統租金[cite: 1]"],
         ["目標1-員工智管家 App", 3163132.0, 0.0, "尚無", "員工智管家 App 租金[cite: 1]"],
         ["目標2-急診室AI檢傷分類戰情室", 226668.0, 0.0, "尚無", "急診室AI檢傷分類戰情室租金[cite: 1]"]
     ]
@@ -340,7 +346,7 @@ elif menu == "💵 經常門統計 (含人事費與業務費)":
     for item_name, b_amt in budget_dict.items():
         spent = actual_spent.get(item_name, 0.0)
         if item_name == '租金':
-            spent = max(spent, 371694.0)
+            spent = max(spent, total_rent_spent)
         remaining = b_amt - spent
         progress = (spent / b_amt * 100) if b_amt > 0 else 0
         biz_stats.append({
@@ -355,14 +361,20 @@ elif menu == "💵 經常門統計 (含人事費與業務費)":
     st.dataframe(df_biz_stats, use_container_width=True)
     
     st.markdown("### 🏢 業務費 - 租金細項執行清單")
-    st.dataframe(df_rent, use_container_width=True)
+    display_rent_df = df_rent.copy()
+    if len(display_rent_df.columns) > 5:
+        col_r_total = display_rent_df.columns[5]
+        display_rent_df[col_r_total] = display_rent_df[col_r_total].apply(
+            lambda x: f"NT$ {x:,.0f}" if pd.notnull(x) and isinstance(x, (int, float)) else x
+        )
+    st.dataframe(display_rent_df, use_container_width=True)
     
     st.info(f"💡 **已沖帳額度統計（E欄總和）**：目前可沖帳額度總計為 **NT$ {total_chongzhang_quota:,.0f}** 元。")
 
 # 3. 資本門統計
 elif menu == "🏢 資本門統計":
     st.header("🏢 資本門經費統計與設備採購追蹤")
-    st.markdown("依據 115.08 經費標準，資本門總預算為 **NT$ 18,271,539**[cite: 1]，以下為 6 大合併項目之經費清單與核銷進度比例（數據自動聯動 Excel 資本門流水帳）：")
+    st.markdown("依據 115.08 經費標準，資本門總預算為 **NT$ 18,271,539**[cite: 1]，以下為 6 大合併項目之經費清單與核銷進度比例：")
     
     capital_tracking_data = [
         ["AI排班與加班預測系統", 3570000.0, ai_spent, "包含30%簽約金、第一、二階段及第三階段(尾款)"],
@@ -393,7 +405,6 @@ elif menu == "🏢 資本門統計":
     st.subheader("📄 二、資本門原始發票與核銷流水明細")
     cap_df = df_capital.iloc[1:6, [0, 1, 2, 3, 4, 5, 6, 7, 8]].copy()
     cap_df.columns = ['發票開立日期', '發票號碼', '品名', '數量', '單價', '總計(含稅)', '核銷單列印日期', '核銷案號', '說明/備註']
-    # 將流水明細中的金額加上會計單位格式
     cap_df['總計(含稅)'] = cap_df['總計(含稅)'].apply(lambda x: f"NT$ {x:,.0f}" if pd.notnull(x) and isinstance(x, (int, float)) else x)
     st.dataframe(cap_df, use_container_width=True)
     
