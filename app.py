@@ -1,7 +1,8 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-from datetime import date
+from datetime import date, datetime
+from zoneinfo import ZoneInfo
 
 # 設定網頁版面
 st.set_page_config(
@@ -58,6 +59,8 @@ if not st.session_state["authenticated"]:
 if 'new_expenses' not in st.session_state:
     st.session_state['new_expenses'] = []
 
+now_tw = datetime.now(ZoneInfo("Asia/Taipei")).strftime("%Y/%m/%d %H:%M")
+
 # ==================== 圓環圖建立函式（保留比例數字，游標指過去顯示詳細金額） ====================
 def make_donut(title, spent, budget, color_done, height=220, title_size=14, center_size=16, show_legend=False):
     rem = max(budget - spent, 0.0)
@@ -90,6 +93,80 @@ def make_donut(title, spent, budget, color_done, height=220, title_size=14, cent
         margin=dict(t=42, b=12, l=12, r=12)
     )
     return fig
+
+def render_pie_bottom_right_time(time_str):
+    st.markdown(
+        f"<div style='text-align: right; color: #9ca3af; font-size: 12px; margin-top: 4px;'>更新時間：{time_str}</div>",
+        unsafe_allow_html=True
+    )
+
+def make_svg_donut(label, spent, budget, color_done='#2ecc71', size=110):
+    pct = (spent / budget * 100) if budget > 0 else 0.0
+    clamped = min(max(pct, 0.0), 100.0)
+    r = 38
+    cx, cy = 55, 55
+    circ = 2 * 3.14159265 * r
+    dash = circ * (clamped / 100.0)
+    return f"""
+    <div style="display:inline-block;width:155px;margin:8px;text-align:center;vertical-align:top;font-family:sans-serif;">
+      <div style="font-size:12px;font-weight:600;color:#222;margin-bottom:4px;">{label}</div>
+      <svg width="{size}" height="{size}" viewBox="0 0 110 110">
+        <circle cx="{cx}" cy="{cy}" r="{r}" fill="none" stroke="#e5e7eb" stroke-width="12"/>
+        <circle cx="{cx}" cy="{cy}" r="{r}" fill="none" stroke="{color_done}" stroke-width="12"
+                stroke-dasharray="{dash:.1f} {circ:.1f}" transform="rotate(-90 {cx} {cy})"/>
+        <text x="{cx}" y="{cy+5}" text-anchor="middle" font-size="14" font-weight="bold" fill="#111">{pct:.1f}%</text>
+      </svg>
+      <div style="font-size:11px;color:#555;">已核銷 NT$ {spent:,.0f}</div>
+      <div style="font-size:11px;color:#777;">預算 NT$ {budget:,.0f}</div>
+    </div>
+    """
+
+def build_html_report(time_str, freq_spent, freq_budget, freq_items, cap_spent, cap_budget, cap_items):
+    total_budget = 85447167.0
+    total_spent = freq_spent + cap_spent
+    total_pct = (total_spent / total_budget * 100) if total_budget > 0 else 0.0
+
+    freq_svg_cards = "".join(make_svg_donut(n, s, b, c) for n, s, b, c in freq_items)
+    cap_svg_cards = "".join(make_svg_donut(n, s, b, c) for n, s, b, c in cap_items)
+
+    return f"""<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<title>範疇一經費核銷報告</title>
+<style>
+  body {{ font-family: "Microsoft JhengHei", Arial, sans-serif; margin: 28px; color: #222; background: #fff; }}
+  h1 {{ margin-bottom: 4px; }}
+  .meta {{ color: #666; font-size: 13px; margin-bottom: 20px; }}
+  .box {{ border: 1px solid #e5e7eb; border-radius: 10px; padding: 18px; margin-bottom: 22px; background: #fafafa; }}
+  .flex-wrap {{ display: flex; flex-wrap: wrap; align-items: flex-start; gap: 16px; }}
+  @media print {{ .no-print {{ display: none; }} }}
+</style>
+</head>
+<body>
+  <div class="no-print" style="margin-bottom:14px;">
+    <button onclick="window.print()" style="padding:8px 14px;font-size:14px;cursor:pointer;">🖨️ 列印 / 另存為 PDF</button>
+  </div>
+  <h1>📊 範疇一經費核銷報告</h1>
+  <div class="meta">更新時間：{time_str} ｜ 範疇一總核銷進度：{total_pct:.1f}%（已核銷 NT$ {total_spent:,.0f} / 預算 NT$ {total_budget:,.0f}）</div>
+
+  <div class="box">
+    <h2>💵 經常門總體與各細項圓餅圖</h2>
+    <div class="flex-wrap">
+      <div>{make_svg_donut("經常門總體核銷", freq_spent, freq_budget, "#2ecc71", size=140)}</div>
+      <div style="flex:1;">{freq_svg_cards}</div>
+    </div>
+  </div>
+
+  <div class="box">
+    <h2>🏢 資本門總體與各系統圓餅圖</h2>
+    <div class="flex-wrap">
+      <div>{make_svg_donut("資本門總體核銷", cap_spent, cap_budget, "#3498db", size=140)}</div>
+      <div style="flex:1;">{cap_svg_cards}</div>
+    </div>
+  </div>
+</body>
+</html>"""
 
 # ==================== 側邊欄導航 ====================
 st.sidebar.header("🔍 系統導航")
@@ -153,7 +230,44 @@ er_rent_spent = rent_df_raw[rent_df_raw['品名'].astype(str).str.contains('急�
 
 total_rent_spent = robot_rent_spent + surgery_rent_spent + app_rent_spent + er_rent_spent
 
-# 1. 總體經費摘要與支用比例（保留完整總覽看板與沖帳追蹤看板）
+freq_budget_all = 48124541.0 + 19051087.48
+freq_spent_all = personnel_spent_100 + (130000 + 20000 + 7000 + 10000 + 90000 + 4200 + total_rent_spent)
+cap_budget_all = 18271539.0
+
+freq_sub_items = [
+    ("碩士級研究助理", ra_budget_100, ra_budget_100, '#27ae60'),
+    ("留任與職涯獎金", bonus_retain_budget_100, bonus_retain_budget_100, '#27ae60'),
+    ("執行人員獎勵", bonus_exec_budget_100, bonus_exec_budget_100, '#27ae60'),
+    ("AI機器人租金", robot_rent_spent, 13642989.0, '#1abc9c'),
+    ("手術排程租金", surgery_rent_spent, 1757098.0, '#1abc9c'),
+    ("智管家App租金", app_rent_spent, 3163132.0, '#1abc9c'),
+    ("急診AI戰情租金", er_rent_spent, 226668.0, '#1abc9c'),
+]
+
+cap_sub_items = [
+    ("AI排班與加班預測系統", ai_spent, 3570000.0, '#3498db'),
+    ("定位點班系統", loc_spent, 1960000.0, '#5dade2'),
+    ("iListen員工脈動平台", ilisten_spent, 720000.0, '#2980b9'),
+    ("全自動掃描機", scanner_spent, 3281539.0, '#3498db'),
+    ("智能磅秤", scale_spent, 740000.0, '#5dade2'),
+    ("ERP系統", erp_spent, 8000000.0, '#2980b9'),
+]
+
+st.sidebar.markdown("---")
+st.sidebar.subheader("📄 匯報報告輸出")
+html_report_content = build_html_report(
+    now_tw, freq_spent_all, freq_budget_all, freq_sub_items,
+    total_cap_spent, cap_budget_all, cap_sub_items
+)
+st.sidebar.download_button(
+    label="📥 下載核銷報告 (含總體與各細項圓餅圖)",
+    data=html_report_content.encode("utf-8"),
+    file_name=f"範疇一經費核銷報告_{datetime.now(ZoneInfo('Asia/Taipei')).strftime('%Y%m%d_%H%M')}.html",
+    mime="text/html",
+    use_container_width=True
+)
+
+# 1. 總體經費摘要與支用比例
 if menu == "📌 總體經費摘要與支用比例":
     st.title("📊 範疇一計畫經費監控與管理儀表板")
     st.markdown("依據 **115.08 經費分配表**、**經費支用標準** 與最新 **114~115年度經費支用紀錄明細** 即時掌握經費動態。")
@@ -284,12 +398,9 @@ if menu == "📌 總體經費摘要與支用比例":
         fig_bar = px.bar(door_summary_bar, x='經費門類', y=['預算金額', '已支用/核銷金額'], barmode='group', title="三大經費門類預算與支用對比")
         st.plotly_chart(fig_bar, use_container_width=True)
 
-# 2. 經常門統計：左邊最大圈圈（經常門總體），右邊小圈圈（人事 3 項 + 租金 4 項）
+# 2. 經常門統計
 elif menu == "💵 經常門統計 (含人事費與業務費)":
     st.header("💵 經常門經費統計 (含人事費與業務費/租金)")
-
-    freq_budget = 48124541.0 + 19051087.48
-    freq_spent = personnel_spent_100 + (130000 + 20000 + 7000 + 10000 + 90000 + 4200 + total_rent_spent)
 
     left_col, right_col = st.columns([1.35, 2.65])
 
@@ -297,8 +408,8 @@ elif menu == "💵 經常門統計 (含人事費與業務費)":
         st.plotly_chart(
             make_donut(
                 title="經常門總體核銷",
-                spent=freq_spent,
-                budget=freq_budget,
+                spent=freq_spent_all,
+                budget=freq_budget_all,
                 color_done='#2ecc71',
                 height=380,
                 title_size=18,
@@ -309,15 +420,6 @@ elif menu == "💵 經常門統計 (含人事費與業務費)":
         )
 
     with right_col:
-        freq_sub_items = [
-            ("碩士級研究助理", ra_budget_100, ra_budget_100, '#27ae60'),
-            ("留任與職涯獎金", bonus_retain_budget_100, bonus_retain_budget_100, '#27ae60'),
-            ("執行人員獎勵", bonus_exec_budget_100, bonus_exec_budget_100, '#27ae60'),
-            ("AI機器人租金", robot_rent_spent, 13642989.0, '#1abc9c'),
-            ("手術排程租金", surgery_rent_spent, 1757098.0, '#1abc9c'),
-            ("智管家App租金", app_rent_spent, 3163132.0, '#1abc9c'),
-            ("急診AI戰情租金", er_rent_spent, 226668.0, '#1abc9c'),
-        ]
         r1 = st.columns(4)
         for idx in range(4):
             title, sp, bg, col = freq_sub_items[idx]
@@ -336,6 +438,7 @@ elif menu == "💵 經常門統計 (含人事費與業務費)":
                     use_container_width=True
                 )
 
+    render_pie_bottom_right_time(now_tw)
     st.markdown("---")
 
     st.subheader("👤 一、人事費支用與預算標準 (總預算: NT$ 48,124,541｜全數列為 100% 核銷)")
@@ -426,11 +529,9 @@ elif menu == "💵 經常門統計 (含人事費與業務費)":
     )
     st.dataframe(display_rent_df, use_container_width=True)
 
-# 3. 資本門統計：左邊最大圈圈（資本門總體），右邊小圈圈（各系統名稱）
+# 3. 資本門統計
 elif menu == "🏢 資本門統計":
     st.header("🏢 資本門經費統計與設備採購追蹤")
-
-    cap_budget = 18271539.0
 
     left_col, right_col = st.columns([1.35, 2.65])
 
@@ -439,7 +540,7 @@ elif menu == "🏢 資本門統計":
             make_donut(
                 title="資本門總體核銷",
                 spent=total_cap_spent,
-                budget=cap_budget,
+                budget=cap_budget_all,
                 color_done='#3498db',
                 height=380,
                 title_size=18,
@@ -450,14 +551,6 @@ elif menu == "🏢 資本門統計":
         )
 
     with right_col:
-        cap_sub_items = [
-            ("AI排班與加班預測系統", ai_spent, 3570000.0, '#3498db'),
-            ("定位點班系統", loc_spent, 1960000.0, '#5dade2'),
-            ("iListen員工脈動平台", ilisten_spent, 720000.0, '#2980b9'),
-            ("全自動掃描機", scanner_spent, 3281539.0, '#3498db'),
-            ("智能磅秤", scale_spent, 740000.0, '#5dade2'),
-            ("ERP系統", erp_spent, 8000000.0, '#2980b9'),
-        ]
         r1 = st.columns(3)
         for idx in range(3):
             title, sp, bg, col = cap_sub_items[idx]
@@ -476,6 +569,7 @@ elif menu == "🏢 資本門統計":
                     use_container_width=True
                 )
 
+    render_pie_bottom_right_time(now_tw)
     st.markdown("---")
     st.subheader("📋 一、資本門 6 大合併項目核銷進度清單")
 
@@ -569,29 +663,3 @@ elif menu == "➕ 新增記帳":
 
 st.markdown("---")
 st.markdown("<p style='text-align: center; color: gray;'>範疇一經費管理系統面板 | Powered by Streamlit & Pandas</p>", unsafe_allow_html=True)
-from datetime import datetime
-from zoneinfo import ZoneInfo
-
-now_tw = datetime.now(ZoneInfo("Asia/Taipei")).strftime("%Y/%m/%d %H:%M")
-
-st.markdown(
-    f"""
-    <style>
-    .report-timestamp-badge {{
-        position: fixed;
-        right: 18px;
-        bottom: 12px;
-        background-color: rgba(30, 32, 37, 0.88);
-        color: #e6e8eb;
-        border: 1px solid rgba(255, 255, 255, 0.15);
-        padding: 5px 11px;
-        border-radius: 6px;
-        font-size: 12px;
-        z-index: 9999;
-        pointer-events: none;
-    }}
-    </style>
-    <div class="report-timestamp-badge">更新時間：{now_tw}</div>
-    """,
-    unsafe_allow_html=True,
-)
