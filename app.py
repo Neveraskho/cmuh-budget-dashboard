@@ -255,4 +255,221 @@ if menu == "📌 總體經費摘要與支用比例":
     with col_b:
         door_summary_bar = pd.DataFrame({
             '經費門類': ['人事費 (經常門)', '業務費與租金 (經常門)', '資本門'],
-            '預算金額': [48124541.00, 19051087
+            '預算金額': [48124541.00, 19051087.48, 18271539.00],
+            '已支用/核銷金額': [p_spent, b_spent, c_spent]
+        })
+        fig_bar = px.bar(door_summary_bar, x='經費門類', y=['預算金額', '已支用/核銷金額'], barmode='group', title="三大經費門類預算與支用對比")
+        st.plotly_chart(fig_bar, use_container_width=True)
+
+# 2. 經常門統計
+elif menu == "💵 經常門統計 (含人事費與業務費)":
+    st.header("💵 經常門經費統計 (含人事費與業務費/租金)")
+    st.markdown("依據支用標準，經常門包含**人事費**與**業務費**（租金歸類於業務費下）。")
+
+    # 最上方「總額＋比例」摘要卡片
+    freq_budget = 48124541.0 + 19051087.0
+    freq_spent = ra_spent + (130000 + 20000 + 7000 + 10000 + 90000 + 4200 + total_rent_spent)
+    freq_progress = (freq_spent / freq_budget * 100) if freq_budget > 0 else 0
+
+    rent_budget = 18789974.0
+    rent_progress = (total_rent_spent / rent_budget * 100) if rent_budget > 0 else 0
+
+    top_c1, top_c2, top_c3 = st.columns(3)
+    with top_c1:
+        st.metric("經常門已核銷總額", f"NT$ {freq_spent:,.0f}", f"核銷比例 {freq_progress:.2f}%")
+    with top_c2:
+        st.metric("租金已核銷總額 (F欄)", f"NT$ {total_rent_spent:,.0f}", f"核銷比例 {rent_progress:.2f}%")
+    with top_c3:
+        st.metric("研究助理已核銷總額", f"NT$ {ra_spent:,.0f}", f"核銷比例 {ra_progress:.2f}%")
+
+    st.markdown("---")
+
+    st.subheader("👤 一、人事費支用與預算標準 (總預算: NT$ 48,124,541)")
+    personnel_data = [
+        ["碩士級研究助理", "-", "-", "-", "NT$ 484,811", "研究助理到職前之經費預算，可釋出 245,145 元供總計畫經費運用。"],
+        ["獎金", "-", "-", "-", "NT$ 32,506,430", "留任獎金及醫學中心職涯發展獎金：護理師、醫檢師、放射師等每季獎勵在職留任人員。"],
+        ["獎金", "-", "-", "-", "NT$ 15,133,300", "計畫執行人員獎勵（個人獎勵與科室獎勵）。"]
+    ]
+    personnel_df = pd.DataFrame(personnel_data, columns=['項目', '單價', '單位', '數量', '合計 (NTD)', '支用說明或編列基準'])
+    st.dataframe(personnel_df, use_container_width=True)
+
+    st.markdown("---")
+    st.subheader("📋 二、研究助理經費核銷進度與比例追蹤")
+    ra_tracking_df = pd.DataFrame([{
+        '項目': '碩士級研究助理 (薪資與三節獎金)',
+        '預算金額 (A)': f"NT$ {ra_budget:,.0f}",
+        '已核銷金額 (B)': f"NT$ {ra_spent:,.0f}",
+        '剩餘可用額度 (C)': f"NT$ {ra_remaining:,.0f}",
+        '核銷執行進度 (%)': f"{ra_progress:.2f}%",
+        '備註說明': '已將 3 月至 9 月研究助理薪資與三節獎金紀錄全數計入已核銷'
+    }])
+    st.dataframe(ra_tracking_df, use_container_width=True)
+
+    st.markdown("### 📄 研究助理實際核銷流水明細表")
+    if not df_personnel_biz.empty:
+        display_ra_df = df_personnel_biz.copy()
+        col_t = display_ra_df.columns[2]
+        display_ra_df[col_t] = display_ra_df[col_t].apply(
+            lambda x: f"NT$ {x:,.0f}" if pd.notnull(x) and isinstance(x, (int, float)) else x
+        )
+        st.dataframe(display_ra_df, use_container_width=True)
+    else:
+        st.info("目前尚未偵測到「業務費-人事費」分頁資料。")
+
+    st.markdown("---")
+    st.subheader("🏢 三、業務費 - 四大租金專案執行與已核銷月份追蹤")
+    rent_tracking_data = [
+        ["目標3-AI機器人引進 (AI照護型)", 13642989.0, robot_rent_spent, "7/10~10月", "機器人使用租金 (50台 * 5.7個月)"],
+        ["目標2-手術室排程預測與管理系統", 1757098.0, surgery_rent_spent, "7月~10月", "手術室排程預測與管理系統租金"],
+        ["目標1-員工智管家 App", 3163132.0, app_rent_spent, "8/17~10月", "員工智管家 App 租金"],
+        ["目標2-急診室AI檢傷分類戰情室", 226668.0, er_rent_spent, "尚無", "急診室AI檢傷分類戰情室租金"]
+    ]
+
+    rent_stats = []
+    for row in rent_tracking_data:
+        name, b_val, s_val, months, desc = row
+        rem_val = b_val - s_val
+        prog = (s_val / b_val * 100) if b_val > 0 else 0
+        rent_stats.append({
+            '租金專案項目': name,
+            '預算金額 (A)': f"NT$ {b_val:,.2f}" if b_val % 1 != 0 else f"NT$ {b_val:,.0f}",
+            '已核銷金額 (B)': f"NT$ {s_val:,.2f}" if s_val % 1 != 0 else f"NT$ {s_val:,.0f}",
+            '剩餘可用額度 (C)': f"NT$ {rem_val:,.2f}" if rem_val % 1 != 0 else f"NT$ {rem_val:,.0f}",
+            '已核銷月份': months,
+            '核銷執行進度 (%)': f"{prog:.2f}%",
+            '說明': desc
+        })
+    df_rent_tracking = pd.DataFrame(rent_stats)
+    st.dataframe(df_rent_tracking, use_container_width=True)
+
+    st.markdown("---")
+    st.subheader("📊 四、業務費各細項實際執行狀況與餘額統計")
+    actual_spent = all_details.groupby(cat_col)[total_amt_col].sum().to_dict()
+
+    biz_stats = []
+    budget_dict = {'餐費': 130000, '雜支費': 20000, '文具紙張': 7000, '印刷': 10000, '出席費': 90000, '國內旅費': 4200, '租金': 18789974}
+
+    for item_name, b_amt in budget_dict.items():
+        spent = actual_spent.get(item_name, 0.0)
+        if item_name == '租金':
+            spent = total_rent_spent
+        remaining = b_amt - spent
+        progress = (spent / b_amt * 100) if b_amt > 0 else 0
+        biz_stats.append({
+            '項目': item_name,
+            '預算金額 (A)': f"NT$ {b_amt:,.0f}",
+            '已核銷支出 (B)': f"NT$ {spent:,.2f}" if spent % 1 != 0 else f"NT$ {spent:,.0f}",
+            '剩餘可用餘額 (C)': f"NT$ {remaining:,.2f}" if remaining % 1 != 0 else f"NT$ {remaining:,.0f}",
+            '執行進度 (%)': f"{progress:.2f}%"
+        })
+
+    df_biz_stats = pd.DataFrame(biz_stats)
+    st.dataframe(df_biz_stats, use_container_width=True)
+
+    st.markdown("### 🏢 業務費 - 租金細項執行清單")
+    display_rent_df = df_rent.iloc[1:12, [0, 1, 2, 3, 4, 5, 6, 7, 8]].copy()
+    display_rent_df.columns = ['發票開立日期', '發票號碼', '品名', '數量', '單價', '總計(含稅)', '核銷金額(F欄)', '核銷單列印日期', '核銷案號']
+    display_rent_df['核銷金額(F欄)'] = display_rent_df['核銷金額(F欄)'].apply(
+        lambda x: f"NT$ {x:,.0f}" if pd.notnull(x) and isinstance(x, (int, float)) else x
+    )
+    st.dataframe(display_rent_df, use_container_width=True)
+
+    st.info(f"💡 **已沖帳額度統計（E欄總和）**：目前可沖帳額度總計為 **NT$ {total_chongzhang_quota:,.0f}** 元。")
+
+# 3. 資本門統計
+elif menu == "🏢 資本門統計":
+    st.header("🏢 資本門經費統計與設備採購追蹤")
+    st.markdown("依據 115.08 經費標準，資本門總預算為 **NT$ 18,271,539**，以下為 6 大合併項目之經費清單與核銷進度比例（已自動聯動 Excel 資本門流水帳）：")
+
+    capital_tracking_data = [
+        ["AI排班與加班預測系統", 3570000.0, ai_spent, "包含30%簽約金、第一、二階段及第三階段(尾款)"],
+        ["定位點班系統", 1960000.0, loc_spent, "加護病房設備室內定位系統建置案（第一期已核銷）"],
+        ["iListen員工脈動平台", 720000.0, ilisten_spent, "包含30%簽約與70%尾款（已核銷平台建置費）"],
+        ["全自動掃描機", 3281539.0, scanner_spent, "數位病理專案所需（剩餘款由本院自籌）"],
+        ["智能磅秤", 740000.0, scale_spent, "擴大科技投資降低工作負荷-智慧量測系統（50個）"],
+        ["ERP系統", 8000000.0, erp_spent, "企業資源規劃系統：ERP系統"]
+    ]
+
+    cap_stats = []
+    for row in capital_tracking_data:
+        name, b_val, s_val, desc = row
+        rem_val = b_val - s_val
+        prog = (s_val / b_val * 100) if b_val > 0 else 0
+        cap_stats.append({
+            '資本門專案項目': name,
+            '預算編列金額 (A)': f"NT$ {b_val:,.2f}" if b_val % 1 != 0 else f"NT$ {b_val:,.0f}",
+            '已核銷金額 (B)': f"NT$ {s_val:,.2f}" if s_val % 1 != 0 else f"NT$ {s_val:,.0f}",
+            '剩餘可用額度 (C)': f"NT$ {rem_val:,.2f}" if rem_val % 1 != 0 else f"NT$ {rem_val:,.0f}",
+            '核銷執行進度 (%)': f"{prog:.2f}%",
+            '備註說明': desc
+        })
+    df_cap_tracking = pd.DataFrame(cap_stats)
+    st.dataframe(df_cap_tracking, use_container_width=True)
+
+    st.markdown("---")
+    st.subheader("📄 二、資本門原始發票與核銷流水明細")
+    cap_df = df_capital.iloc[1:12, [0, 1, 2, 3, 4, 5, 6, 7, 8]].copy()
+    cap_df.columns = ['發票開立日期', '發票號碼', '品名', '數量', '單價', '總計(含稅)', '核銷單列印日期', '核銷案號', '說明/備註']
+    cap_df['總計(含稅)'] = cap_df['總計(含稅)'].apply(lambda x: f"NT$ {x:,.0f}" if pd.notnull(x) and isinstance(x, (int, float)) else x)
+    st.dataframe(cap_df, use_container_width=True)
+
+    st.metric("資本門已核銷總額", f"NT$ {total_cap_spent:,.0f}")
+
+# 4. 明細表
+elif menu == "📋 明細表":
+    st.header("📋 經費支用詳細明細與待沖帳管理")
+
+    tab1, tab2, tab3 = st.tabs(["📄 全部流水帳", "⏳ 待沖帳項目清單", "🔍 可沖帳額度明細"])
+
+    with tab1:
+        st.dataframe(all_details, use_container_width=True)
+
+    with tab2:
+        pending_df = all_details[all_details[cat_col].isna() | (all_details[cat_col] == '待沖帳')].copy()
+        st.dataframe(pending_df, use_container_width=True)
+        st.warning(f"目前共有 {len(pending_df)} 筆待沖帳項目，總計核銷總額 NT$ {pending_df[total_amt_col].sum():,.0f} 元。")
+
+    with tab3:
+        chongzhang_df = all_details[all_details[chongzhang_amt_col] > 0].copy()
+        st.dataframe(chongzhang_df, use_container_width=True)
+        st.success(f"有設定可沖帳額度的項目共 {len(chongzhang_df)} 筆，可沖帳額度總計 NT$ {chongzhang_df[chongzhang_amt_col].sum():,.0f} 元。")
+
+# 5. 新增記帳
+elif menu == "➕ 新增記帳":
+    st.header("➕ 記錄新的經費花費")
+    st.markdown("完全對齊明細表 A-K 欄架構：可填寫發票日期、會計核銷科目、實際品項、核銷總額、可沖帳額度、實際支出、代墊人員與核銷案號。")
+
+    with st.form("expense_form"):
+        col1, col2 = st.columns(2)
+        with col1:
+            exp_date = st.date_input("發票/收據日期 (A欄)", value=date.today())
+            exp_category = st.selectbox("會計核銷科目 (B欄)", ["餐費", "文具紙張", "印刷", "雜支費", "出席費", "國內旅費", "租金", "資本門", "待沖帳", "代墊還款"])
+            exp_item = st.text_input("實際購買品項 (C欄)", value="")
+            exp_total_amt = st.number_input("核銷總額 / 發票總額 (D欄)", min_value=0, value=1400, step=100)
+        with col2:
+            exp_chongzhang = st.number_input("可沖帳額度 (E欄)", min_value=0, value=0, step=50)
+            exp_actual = st.number_input("實際支出 (F欄)", min_value=0, value=1400, step=50)
+            exp_payer = st.text_input("代墊 / 借支人員", value="")
+            exp_status = st.selectbox("還款狀態", ["V", "未還款", "-"])
+            exp_case_no = st.text_input("核銷案號 (J欄)", value="")
+
+        submitted = st.form_submit_button("💾 儲存這筆花費紀錄")
+        if submitted:
+            new_row = {
+                "發票/收據日期": str(exp_date),
+                cat_col: exp_category,
+                item_col: exp_item,
+                total_amt_col: exp_total_amt,
+                chongzhang_amt_col: exp_chongzhang,
+                actual_amt_col: exp_actual,
+                "代墊 / 借支人員": exp_payer,
+                "自科室借款": 0,
+                "還款狀態": exp_status,
+                "核銷單\n列印日期": "",
+                "核銷案號\n(黃底未借支)": exp_case_no
+            }
+            st.session_state['new_expenses'].append(new_row)
+            st.success(f"✅ 成功新增記錄！科目：**{exp_category}**，核銷總額：**${exp_total_amt:,.0f}** 元（可沖帳額度：**${exp_chongzhang:,.0f}** 元）。")
+
+st.markdown("---")
+st.markdown("<p style='text-align: center; color: gray;'>範疇一經費管理系統面板 | Powered by Streamlit & Pandas</p>", unsafe_allow_html=True)
