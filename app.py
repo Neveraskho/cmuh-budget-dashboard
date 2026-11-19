@@ -569,3 +569,29 @@ elif menu == "➕ 新增記帳":
 
 st.markdown("---")
 st.markdown("<p style='text-align: center; color: gray;'>範疇一經費管理系統面板 | Powered by Streamlit & Pandas</p>", unsafe_allow_html=True)
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
+now_tw = datetime.now(ZoneInfo("Asia/Taipei")).strftime("%Y/%m/%d %H:%M")
+
+st.markdown(
+    f"""
+    <style>
+    .report-timestamp-badge {{
+        position: fixed;
+        right: 18px;
+        bottom: 12px;
+        background-color: rgba(30, 32, 37, 0.88);
+        color: #e6e8eb;
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        padding: 5px 11px;
+        border-radius: 6px;
+        font-size: 12px;
+        z-index: 9999;
+        pointer-events: none;
+    }}
+    </style>
+    <div class="report-timestamp-badge">更新時間：{now_tw}</div>
+    """,
+    unsafe_allow_html=True,
+)
