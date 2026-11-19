@@ -102,6 +102,13 @@ def make_donut(title, spent, budget, color_done, height=220, title_size=14, cent
     )
     return fig
 
+def sort_items_by_pct_desc(items):
+    def _key(item):
+        _, sp, bg, _ = item
+        pct = (sp / bg * 100.0) if bg > 0 else 0.0
+        return (-pct, item[0])
+    return sorted(items, key=_key)
+
 def render_pie_bottom_right_time(time_str):
     st.markdown(
         f"<div style='text-align: right; color: #9ca3af; font-size: 12px; margin-top: 4px;'>更新時間：{time_str}</div>",
@@ -158,7 +165,7 @@ def generate_pdf_report_bytes(
     buf = io.BytesIO()
     with PdfPages(buf) as pdf:
         # ==================== Page 1: 範疇一總體使用比例 + 經常門總體與各細項 ====================
-        fig1 = plt.figure(figsize=(11.69, 8.27), dpi=200)  # A4 橫式
+        fig1 = plt.figure(figsize=(11.69, 8.27), dpi=200)
         fig1.patch.set_facecolor("#F8FAFC")
 
         header_box = FancyBboxPatch((0.03, 0.89), 0.94, 0.08, boxstyle="round,pad=0.01,rounding_size=0.015",
@@ -350,23 +357,24 @@ freq_budget_all = 48124541.0 + 19051087.48
 freq_spent_all = p_spent + b_spent
 cap_budget_all = 18271539.0
 
-freq_row1_items = [
+# 三種（人事費 / 四大租金 / 業務費細項）各自依執行率由高到低（100% -> 0%）排序
+freq_row1_items = sort_items_by_pct_desc([
     ("碩士級研究助理", ra_budget_100, ra_budget_100, '#10B981'),
     ("留任與職涯獎金", bonus_retain_budget_100, bonus_retain_budget_100, '#10B981'),
     ("執行人員獎勵", bonus_exec_budget_100, bonus_exec_budget_100, '#10B981'),
-]
+])
 
-freq_row2_rent_items = [
+freq_row2_rent_items = sort_items_by_pct_desc([
     ("AI機器人租金", robot_rent_spent, 13642989.0, '#14B8A6'),
     ("手術排程租金", surgery_rent_spent, 1757098.0, '#14B8A6'),
     ("智管家App租金", app_rent_spent, 3163132.0, '#14B8A6'),
     ("急診AI戰情租金", er_rent_spent, 226668.0, '#14B8A6'),
-]
+])
 
-freq_row3_biz_items = [
+freq_row3_biz_items = sort_items_by_pct_desc([
     (item_name, actual_spent.get(item_name, 0.0), b_amt, '#0EA5E9')
     for item_name, b_amt in biz_budget_dict.items()
-]
+])
 
 freq_sub_items = freq_row1_items + freq_row2_rent_items
 
@@ -558,7 +566,7 @@ if menu == "📌 總體經費摘要與支用比例":
 elif menu == "💵 經常門統計 (含人事費與業務費)":
     st.header("💵 經常門經費統計 (含人事費與業務費/租金)")
 
-    left_col, right_col = st.columns([1.3, 2.7])
+    left_col, right_col = st.columns([1.25, 2.75])
 
     with left_col:
         st.plotly_chart(
@@ -576,7 +584,8 @@ elif menu == "💵 經常門統計 (含人事費與業務費)":
         )
 
     with right_col:
-        r1 = st.columns(4)
+        # 第 1 類：人事費（依比例由高到低 100% -> 0% 排在最左邊）
+        r1 = st.columns(3)
         for idx, (title, sp, bg, col) in enumerate(freq_row1_items):
             with r1[idx]:
                 st.plotly_chart(
@@ -584,6 +593,7 @@ elif menu == "💵 經常門統計 (含人事費與業務費)":
                     use_container_width=True
                 )
 
+        # 第 2 類：四大租金專案（依比例由高到低 100% -> 0% 排在最左邊）
         r2 = st.columns(4)
         for idx, (title, sp, bg, col) in enumerate(freq_row2_rent_items):
             with r2[idx]:
@@ -592,6 +602,7 @@ elif menu == "💵 經常門統計 (含人事費與業務費)":
                     use_container_width=True
                 )
 
+        # 第 3 類：業務費各細項（依比例由高到低 100% -> 0% 排在最左邊，固定 3 欄 × 2 列對齊）
         r3_top = st.columns(3)
         for idx, (title, sp, bg, col) in enumerate(freq_row3_biz_items[:3]):
             with r3_top[idx]:
