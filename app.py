@@ -19,12 +19,12 @@ def load_data():
     df_detail = pd.read_excel(FILE_DETAIL, sheet_name='明細表 ')
     df_capital = pd.read_excel(FILE_DETAIL, sheet_name='資本門')
     df_rent = pd.read_excel(FILE_DETAIL, sheet_name='業務費-租金')
-    
+
     try:
         df_personnel_biz = pd.read_excel(FILE_DETAIL, sheet_name='業務費-人事費')
     except Exception:
         df_personnel_biz = pd.DataFrame()
-        
+
     return df_summary, df_detail, df_capital, df_rent, df_personnel_biz
 
 try:
@@ -42,16 +42,16 @@ if "authenticated" not in st.session_state:
 if not st.session_state["authenticated"]:
     st.title("🔒 範疇一經費管理系統 - 請先登入")
     st.markdown("本系統包含計畫經費機敏資料，請輸入存取密碼以繼續。")
-    
+
     password_input = st.text_input("請輸入系統訪問密碼：", type="password")
-    
+
     if st.button("登入系統"):
         if password_input == CORRECT_PASSWORD:
             st.session_state["authenticated"] = True
             st.rerun()
         else:
             st.error("❌ 密碼錯誤，請重新輸入。")
-            
+
     st.stop()
 
 # ==================== 初始化 Session State 用於即時記帳 ====================
@@ -108,7 +108,7 @@ erp_spent = cap_df_raw[cap_df_raw['品名'].astype(str).str.contains('ERP', na=F
 
 total_cap_spent = cap_df_raw['總計'].sum()
 
-# 動態計算租金各項目已核銷金額（改抓 F 欄「核銷金額」，在 pandas 中為第 6 欄 index 5）
+# 動態計算租金各項目已核銷金額（改抓 F 欄「核銷金額」）
 rent_df_raw = df_rent.iloc[1:12, [1, 2, 5, 6, 7]].copy()
 rent_df_raw.columns = ['發票號碼', '品名', '核銷金額', '核銷單列印日期', '核銷案號']
 rent_df_raw['核銷金額'] = pd.to_numeric(rent_df_raw['核銷金額'], errors='coerce').fillna(0)
@@ -143,4 +143,116 @@ with col5:
 with col6:
     st.metric("🔍 已沖帳總額 (E欄加總)", f"NT$ {total_chongzhang_quota:,.0f}")
 with col7:
-    st.
+    st.metric("📊 剩餘未沖帳金額", f"NT$ {remaining_unreimbursed:,.0f}", delta_color="inverse")
+
+st.markdown("---")
+
+# ==================== 側邊欄導航 ====================
+st.sidebar.header("🔍 系統導航")
+menu = st.sidebar.radio("選擇功能模組", [
+    "📌 總體經費摘要與支用比例",
+    "💵 經常門統計 (含人事費與業務費)",
+    "🏢 資本門統計",
+    "📋 明細表",
+    "➕ 新增記帳"
+])
+
+# 1. 總體經費摘要與支用比例
+if menu == "📌 總體經費摘要與支用比例":
+    st.header("📌 總體經費執行摘要與支用比例")
+
+    p_spent = ra_spent
+    b_spent = 130000 + 20000 + 7000 + 10000 + 90000 + 4200 + total_rent_spent
+    c_spent = total_cap_spent
+    total_spent = p_spent + b_spent + c_spent
+    total_budget = 85447167.00
+    total_remaining = total_budget - total_spent
+    total_progress = (total_spent / total_budget * 100) if total_budget > 0 else 0
+
+    html_table = f"""
+    <style>
+    .accounting-table {{
+        width: 100%;
+        border-collapse: collapse;
+        font-family: sans-serif;
+        font-size: 15px;
+        background-color: white;
+        color: #31333F;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        border-radius: 8px;
+        overflow: hidden;
+    }}
+    .accounting-table th, .accounting-table td {{
+        padding: 12px 16px;
+        border-bottom: 1px solid #e0e0e0;
+    }}
+    .accounting-table th {{
+        background-color: #f0f2f6;
+        font-weight: 600;
+        text-align: left;
+    }}
+    .accounting-table th:nth-child(n+2), .accounting-table td:nth-child(n+2) {{
+        text-align: right;
+    }}
+    .accounting-table tr:hover {{
+        background-color: #f8f9fa;
+    }}
+    .total-row {{
+        font-weight: bold;
+        background-color: #eef2f7 !important;
+    }}
+    </style>
+
+    <table class="accounting-table">
+      <tr>
+        <th>經費門類</th>
+        <th>預算金額</th>
+        <th>已支用/核銷金額</th>
+        <th>剩餘可用金額</th>
+        <th>支用比例(%)</th>
+      </tr>
+      <tr>
+        <td>人事費 (經常門)</td>
+        <td>NT$ 48,124,541</td>
+        <td>NT$ {p_spent:,.2f}</td>
+        <td>NT$ {48124541 - p_spent:,.2f}</td>
+        <td>{(p_spent / 48124541 * 100):.2f}%</td>
+      </tr>
+      <tr>
+        <td>業務費與租金 (經常門)</td>
+        <td>NT$ 19,051,087.48</td>
+        <td>NT$ {b_spent:,.2f}</td>
+        <td>NT$ {19051087.48 - b_spent:,.2f}</td>
+        <td>{(b_spent / 19051087.48 * 100):.2f}%</td>
+      </tr>
+      <tr>
+        <td>資本門</td>
+        <td>NT$ 18,271,539</td>
+        <td>NT$ {c_spent:,.2f}</td>
+        <td>NT$ {18271539 - c_spent:,.2f}</td>
+        <td>{(c_spent / 18271539 * 100):.2f}%</td>
+      </tr>
+      <tr class="total-row">
+        <td>📌 範疇一總經費合計</td>
+        <td>NT$ {total_budget:,.2f}</td>
+        <td>NT$ {total_spent:,.2f}</td>
+        <td>NT$ {total_remaining:,.2f}</td>
+        <td>{total_progress:.2f}%</td>
+      </tr>
+    </table>
+    """
+    st.markdown(html_table, unsafe_allow_html=True)
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    col_a, col_b = st.columns(2)
+    with col_a:
+        door_summary_pie = pd.DataFrame({
+            '經費門類': ['人事費 (經常門)', '業務費與租金 (經常門)', '資本門'],
+            '預算金額': [48124541.00, 19051087.48, 18271539.00]
+        })
+        fig_pie = px.pie(door_summary_pie, names='經費門類', values='預算金額', title="三大經費門類預算分配佔比", hole=0.4)
+        st.plotly_chart(fig_pie, use_container_width=True)
+    with col_b:
+        door_summary_bar = pd.DataFrame({
+            '經費門類': ['人事費 (經常門)', '業務費與租金 (經常門)', '資本門'],
+            '預算金額': [48124541.00, 19051087
