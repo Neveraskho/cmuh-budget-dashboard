@@ -58,10 +58,15 @@ if not st.session_state["authenticated"]:
 if 'new_expenses' not in st.session_state:
     st.session_state['new_expenses'] = []
 
-# ==================== 標題與介紹 ====================
-st.title("📊 範疇一計畫經費監控與管理儀表板")
-st.markdown("依據 **115.08 經費分配表**、**經費支用標準** 與最新 **114~115年度經費支用紀錄明細** 即時掌握經費動態。")
-st.markdown("---")
+# ==================== 側邊欄導航 ====================
+st.sidebar.header("🔍 系統導航")
+menu = st.sidebar.radio("選擇功能模組", [
+    "📌 總體經費摘要與支用比例",
+    "💵 經常門統計 (含人事費與業務費)",
+    "🏢 資本門統計",
+    "📋 明細表",
+    "➕ 新增記帳"
+])
 
 # 欄位精準對應明細表
 cat_col = '會計核銷科目'
@@ -82,17 +87,21 @@ total_chongzhang_quota = all_details[chongzhang_amt_col].sum()
 # 計算剩餘未沖帳金額
 remaining_unreimbursed = total_pending - total_chongzhang_quota
 
-# 計算研究助理已核銷總額
+# 人事費 3 筆項目年底均列為 100% 核銷（總預算 NT$ 48,124,541）
+personnel_full_budget = 484811.0 + 32506430.0 + 15133300.0
+personnel_spent_100 = personnel_full_budget
+
+# 保留研究助理明細表實際流水紀錄供參考
 ra_budget = 484811.0
 if not df_personnel_biz.empty:
     col_name_total = df_personnel_biz.columns[2]
     valid_ra = df_personnel_biz.iloc[1:9].copy()
-    ra_spent = pd.to_numeric(valid_ra[col_name_total], errors='coerce').sum()
+    ra_actual_log_spent = pd.to_numeric(valid_ra[col_name_total], errors='coerce').sum()
 else:
-    ra_spent = 258443.0
+    ra_actual_log_spent = 258443.0
 
-ra_remaining = ra_budget - ra_spent
-ra_progress = (ra_spent / ra_budget * 100) if ra_budget > 0 else 0
+ra_remaining = ra_budget - ra_actual_log_spent
+ra_progress = (ra_actual_log_spent / ra_budget * 100) if ra_budget > 0 else 0
 
 # 動態計算資本門各項目已核銷金額（從 df_capital 抓取）
 cap_df_raw = df_capital.iloc[1:12, [1, 2, 5]].copy()
@@ -108,7 +117,7 @@ erp_spent = cap_df_raw[cap_df_raw['品名'].astype(str).str.contains('ERP', na=F
 
 total_cap_spent = cap_df_raw['總計'].sum()
 
-# 動態計算租金各項目已核銷金額（改抓 F 欄「核銷金額」）
+# 動態計算租金各項目已核銷金額（抓 F 欄「核銷金額」）
 rent_df_raw = df_rent.iloc[1:12, [1, 2, 5, 6, 7]].copy()
 rent_df_raw.columns = ['發票號碼', '品名', '核銷金額', '核銷單列印日期', '核銷案號']
 rent_df_raw['核銷金額'] = pd.to_numeric(rent_df_raw['核銷金額'], errors='coerce').fillna(0)
@@ -120,48 +129,38 @@ er_rent_spent = rent_df_raw[rent_df_raw['品名'].astype(str).str.contains('急�
 
 total_rent_spent = robot_rent_spent + surgery_rent_spent + app_rent_spent + er_rent_spent
 
-# ==================== 頂部核心經費看板 ====================
-st.subheader("📌 核心經費總覽看板")
-
-col1, col2, col3, col4 = st.columns(4)
-with col1:
-    st.metric("範疇一總經費上限", "NT$ 85,447,167")
-with col2:
-    st.metric("人事費總預算 (經常門)", "NT$ 48,124,541", "穩定執行中")
-with col3:
-    st.metric("業務費總預算 (含租金)", "NT$ 19,051,087")
-with col4:
-    st.metric("資本門總預算", "NT$ 18,271,539")
-
-st.markdown("")
-
-# 獨立隔開的沖帳追蹤看板
-st.subheader("📌 經費沖帳進度追蹤看板")
-col5, col6, col7 = st.columns(3)
-with col5:
-    st.metric("⏳ 待沖帳項目總額", f"NT$ {total_pending:,.0f}")
-with col6:
-    st.metric("🔍 已沖帳總額 (E欄加總)", f"NT$ {total_chongzhang_quota:,.0f}")
-with col7:
-    st.metric("📊 剩餘未沖帳金額", f"NT$ {remaining_unreimbursed:,.0f}", delta_color="inverse")
-
-st.markdown("---")
-
-# ==================== 側邊欄導航 ====================
-st.sidebar.header("🔍 系統導航")
-menu = st.sidebar.radio("選擇功能模組", [
-    "📌 總體經費摘要與支用比例",
-    "💵 經常門統計 (含人事費與業務費)",
-    "🏢 資本門統計",
-    "📋 明細表",
-    "➕ 新增記帳"
-])
-
-# 1. 總體經費摘要與支用比例
+# 1. 總體經費摘要與支用比例（保留完整總覽看板與沖帳追蹤看板）
 if menu == "📌 總體經費摘要與支用比例":
+    st.title("📊 範疇一計畫經費監控與管理儀表板")
+    st.markdown("依據 **115.08 經費分配表**、**經費支用標準** 與最新 **114~115年度經費支用紀錄明細** 即時掌握經費動態。")
+    st.markdown("---")
+
+    st.subheader("📌 核心經費總覽看板")
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("範疇一總經費上限", "NT$ 85,447,167")
+    with col2:
+        st.metric("人事費總預算 (經常門)", "NT$ 48,124,541", "年底列為 100% 核銷")
+    with col3:
+        st.metric("業務費總預算 (含租金)", "NT$ 19,051,087")
+    with col4:
+        st.metric("資本門總預算", "NT$ 18,271,539")
+
+    st.markdown("")
+
+    st.subheader("📌 經費沖帳進度追蹤看板")
+    col5, col6, col7 = st.columns(3)
+    with col5:
+        st.metric("⏳ 待沖帳項目總額", f"NT$ {total_pending:,.0f}")
+    with col6:
+        st.metric("🔍 已沖帳總額 (E欄加總)", f"NT$ {total_chongzhang_quota:,.0f}")
+    with col7:
+        st.metric("📊 剩餘未沖帳金額", f"NT$ {remaining_unreimbursed:,.0f}", delta_color="inverse")
+
+    st.markdown("---")
     st.header("📌 總體經費執行摘要與支用比例")
 
-    p_spent = ra_spent
+    p_spent = personnel_spent_100
     b_spent = 130000 + 20000 + 7000 + 10000 + 90000 + 4200 + total_rent_spent
     c_spent = total_cap_spent
     total_spent = p_spent + b_spent + c_spent
@@ -212,11 +211,11 @@ if menu == "📌 總體經費摘要與支用比例":
         <th>支用比例(%)</th>
       </tr>
       <tr>
-        <td>人事費 (經常門)</td>
+        <td>人事費 (經常門，年底 100% 核銷)</td>
         <td>NT$ 48,124,541</td>
         <td>NT$ {p_spent:,.2f}</td>
         <td>NT$ {48124541 - p_spent:,.2f}</td>
-        <td>{(p_spent / 48124541 * 100):.2f}%</td>
+        <td>100.00%</td>
       </tr>
       <tr>
         <td>業務費與租金 (經常門)</td>
@@ -261,47 +260,76 @@ if menu == "📌 總體經費摘要與支用比例":
         fig_bar = px.bar(door_summary_bar, x='經費門類', y=['預算金額', '已支用/核銷金額'], barmode='group', title="三大經費門類預算與支用對比")
         st.plotly_chart(fig_bar, use_container_width=True)
 
-# 2. 經常門統計
+# 2. 經常門統計（不顯示頂部總覽看板；單一圖示顯示經常門最主要核銷比例）
 elif menu == "💵 經常門統計 (含人事費與業務費)":
     st.header("💵 經常門經費統計 (含人事費與業務費/租金)")
-    st.markdown("依據支用標準，經常門包含**人事費**與**業務費**（租金歸類於業務費下）。")
 
-    # 最上方「總額＋比例」摘要卡片
-    freq_budget = 48124541.0 + 19051087.0
-    freq_spent = ra_spent + (130000 + 20000 + 7000 + 10000 + 90000 + 4200 + total_rent_spent)
-    freq_progress = (freq_spent / freq_budget * 100) if freq_budget > 0 else 0
+    freq_budget = 48124541.0 + 19051087.48
+    freq_spent = personnel_spent_100 + (130000 + 20000 + 7000 + 10000 + 90000 + 4200 + total_rent_spent)
+    freq_rem = max(freq_budget - freq_spent, 0.0)
+    freq_pct = (freq_spent / freq_budget * 100) if freq_budget > 0 else 0
 
-    rent_budget = 18789974.0
-    rent_progress = (total_rent_spent / rent_budget * 100) if rent_budget > 0 else 0
-
-    top_c1, top_c2, top_c3 = st.columns(3)
-    with top_c1:
-        st.metric("經常門已核銷總額", f"NT$ {freq_spent:,.0f}", f"核銷比例 {freq_progress:.2f}%")
-    with top_c2:
-        st.metric("租金已核銷總額 (F欄)", f"NT$ {total_rent_spent:,.0f}", f"核銷比例 {rent_progress:.2f}%")
-    with top_c3:
-        st.metric("研究助理已核銷總額", f"NT$ {ra_spent:,.0f}", f"核銷比例 {ra_progress:.2f}%")
+    fig_freq = px.pie(
+        pd.DataFrame({
+            '狀態': ['已核銷進度', '剩餘可用額度'],
+            '金額': [freq_spent, freq_rem]
+        }),
+        names='狀態',
+        values='金額',
+        hole=0.65,
+        color='狀態',
+        color_discrete_map={'已核銷進度': '#2ecc71', '剩餘可用額度': '#3a3d42'},
+        title="經常門整體核銷進度圖示"
+    )
+    fig_freq.update_traces(textinfo='percent', textfont_size=16)
+    fig_freq.add_annotation(
+        text=f"<b>{freq_pct:.1f}%</b><br>已核銷",
+        x=0.5, y=0.5, font_size=20, showarrow=False
+    )
+    fig_freq.update_layout(height=320, margin=dict(t=50, b=20, l=20, r=20))
+    st.plotly_chart(fig_freq, use_container_width=True)
 
     st.markdown("---")
 
-    st.subheader("👤 一、人事費支用與預算標準 (總預算: NT$ 48,124,541)")
+    st.subheader("👤 一、人事費支用與預算標準 (總預算: NT$ 48,124,541｜全數列為 100% 核銷)")
     personnel_data = [
-        ["碩士級研究助理", "-", "-", "-", "NT$ 484,811", "研究助理到職前之經費預算，可釋出 245,145 元供總計畫經費運用。"],
-        ["獎金", "-", "-", "-", "NT$ 32,506,430", "留任獎金及醫學中心職涯發展獎金：護理師、醫檢師、放射師等每季獎勵在職留任人員。"],
-        ["獎金", "-", "-", "-", "NT$ 15,133,300", "計畫執行人員獎勵（個人獎勵與科室獎勵）。"]
+        [
+            "碩士級研究助理",
+            "NT$ 484,811",
+            "NT$ 484,811",
+            "100.00%",
+            "研究助理到職前之經費預算，可釋出 245,145 元供總計畫經費運用（年底預估全數核銷）。"
+        ],
+        [
+            "獎金",
+            "NT$ 32,506,430",
+            "NT$ 32,506,430",
+            "100.00%",
+            "留任獎金及醫學中心職涯發展獎金：護理師、醫檢師、放射師等每季獎勵在職留任人員（年底預估全數核銷）。"
+        ],
+        [
+            "獎金",
+            "NT$ 15,133,300",
+            "NT$ 15,133,300",
+            "100.00%",
+            "計畫執行人員獎勵（個人獎勵與科室獎勵，年底預估全數核銷）。"
+        ]
     ]
-    personnel_df = pd.DataFrame(personnel_data, columns=['項目', '單價', '單位', '數量', '合計 (NTD)', '支用說明或編列基準'])
+    personnel_df = pd.DataFrame(
+        personnel_data,
+        columns=['項目', '預算金額 (NTD)', '已核銷金額 (NTD)', '核銷比例', '支用說明或編列基準']
+    )
     st.dataframe(personnel_df, use_container_width=True)
 
     st.markdown("---")
-    st.subheader("📋 二、研究助理經費核銷進度與比例追蹤")
+    st.subheader("📋 二、研究助理經費核銷進度與比例追蹤（本單位流水紀錄參考）")
     ra_tracking_df = pd.DataFrame([{
         '項目': '碩士級研究助理 (薪資與三節獎金)',
         '預算金額 (A)': f"NT$ {ra_budget:,.0f}",
-        '已核銷金額 (B)': f"NT$ {ra_spent:,.0f}",
+        '已核銷金額 (B)': f"NT$ {ra_actual_log_spent:,.0f}",
         '剩餘可用額度 (C)': f"NT$ {ra_remaining:,.0f}",
         '核銷執行進度 (%)': f"{ra_progress:.2f}%",
-        '備註說明': '已將 3 月至 9 月研究助理薪資與三節獎金紀錄全數計入已核銷'
+        '備註說明': '上方「人事費支用與預算標準」已依指示列為 100.00% 核銷；此區為目前分頁流水紀錄參考'
     }])
     st.dataframe(ra_tracking_df, use_container_width=True)
 
@@ -374,12 +402,36 @@ elif menu == "💵 經常門統計 (含人事費與業務費)":
     )
     st.dataframe(display_rent_df, use_container_width=True)
 
-    st.info(f"💡 **已沖帳額度統計（E欄總和）**：目前可沖帳額度總計為 **NT$ {total_chongzhang_quota:,.0f}** 元。")
-
-# 3. 資本門統計
+# 3. 資本門統計（不顯示頂部總覽看板與沖帳追蹤看板；單一圖示顯示資本門最主要核銷比例）
 elif menu == "🏢 資本門統計":
     st.header("🏢 資本門經費統計與設備採購追蹤")
-    st.markdown("依據 115.08 經費標準，資本門總預算為 **NT$ 18,271,539**，以下為 6 大合併項目之經費清單與核銷進度比例（已自動聯動 Excel 資本門流水帳）：")
+
+    cap_budget = 18271539.0
+    cap_rem = max(cap_budget - total_cap_spent, 0.0)
+    cap_pct = (total_cap_spent / cap_budget * 100) if cap_budget > 0 else 0
+
+    fig_cap = px.pie(
+        pd.DataFrame({
+            '狀態': ['已核銷進度', '剩餘可用額度'],
+            '金額': [total_cap_spent, cap_rem]
+        }),
+        names='狀態',
+        values='金額',
+        hole=0.65,
+        color='狀態',
+        color_discrete_map={'已核銷進度': '#3498db', '剩餘可用額度': '#3a3d42'},
+        title="資本門整體核銷進度圖示"
+    )
+    fig_cap.update_traces(textinfo='percent', textfont_size=16)
+    fig_cap.add_annotation(
+        text=f"<b>{cap_pct:.1f}%</b><br>已核銷",
+        x=0.5, y=0.5, font_size=20, showarrow=False
+    )
+    fig_cap.update_layout(height=320, margin=dict(t=50, b=20, l=20, r=20))
+    st.plotly_chart(fig_cap, use_container_width=True)
+
+    st.markdown("---")
+    st.subheader("📋 一、資本門 6 大合併項目核銷進度清單")
 
     capital_tracking_data = [
         ["AI排班與加班預測系統", 3570000.0, ai_spent, "包含30%簽約金、第一、二階段及第三階段(尾款)"],
@@ -412,8 +464,6 @@ elif menu == "🏢 資本門統計":
     cap_df.columns = ['發票開立日期', '發票號碼', '品名', '數量', '單價', '總計(含稅)', '核銷單列印日期', '核銷案號', '說明/備註']
     cap_df['總計(含稅)'] = cap_df['總計(含稅)'].apply(lambda x: f"NT$ {x:,.0f}" if pd.notnull(x) and isinstance(x, (int, float)) else x)
     st.dataframe(cap_df, use_container_width=True)
-
-    st.metric("資本門已核銷總額", f"NT$ {total_cap_spent:,.0f}")
 
 # 4. 明細表
 elif menu == "📋 明細表":
