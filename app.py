@@ -58,6 +58,39 @@ if not st.session_state["authenticated"]:
 if 'new_expenses' not in st.session_state:
     st.session_state['new_expenses'] = []
 
+# ==================== 圓環圖建立函式（保留比例數字，游標指過去顯示詳細金額） ====================
+def make_donut(title, spent, budget, color_done, height=220, title_size=14, center_size=16, show_legend=False):
+    rem = max(budget - spent, 0.0)
+    pct = (spent / budget * 100) if budget > 0 else 0.0
+    fig = px.pie(
+        pd.DataFrame({
+            '狀態': ['已核銷進度', '剩餘可用額度'],
+            '金額': [spent, rem]
+        }),
+        names='狀態',
+        values='金額',
+        hole=0.65,
+        color='狀態',
+        color_discrete_map={'已核銷進度': color_done, '剩餘可用額度': '#3a3d42'},
+        title=title
+    )
+    fig.update_traces(
+        textinfo='percent',
+        textfont_size=max(center_size - 3, 11),
+        hovertemplate='<b>%{label}</b><br>金額：NT$ %{value:,.0f}<br>比例：%{percent}<extra></extra>'
+    )
+    fig.add_annotation(
+        text=f"<b>{pct:.1f}%</b>",
+        x=0.5, y=0.5, font_size=center_size, showarrow=False
+    )
+    fig.update_layout(
+        height=height,
+        showlegend=show_legend,
+        title=dict(font=dict(size=title_size), x=0.5, xanchor='center'),
+        margin=dict(t=42, b=12, l=12, r=12)
+    )
+    return fig
+
 # ==================== 側邊欄導航 ====================
 st.sidebar.header("🔍 系統導航")
 menu = st.sidebar.radio("選擇功能模組", [
@@ -88,20 +121,11 @@ total_chongzhang_quota = all_details[chongzhang_amt_col].sum()
 remaining_unreimbursed = total_pending - total_chongzhang_quota
 
 # 人事費 3 筆項目年底均列為 100% 核銷（總預算 NT$ 48,124,541）
-personnel_full_budget = 484811.0 + 32506430.0 + 15133300.0
+ra_budget_100 = 484811.0
+bonus_retain_budget_100 = 32506430.0
+bonus_exec_budget_100 = 15133300.0
+personnel_full_budget = ra_budget_100 + bonus_retain_budget_100 + bonus_exec_budget_100
 personnel_spent_100 = personnel_full_budget
-
-# 保留研究助理明細表實際流水紀錄供參考
-ra_budget = 484811.0
-if not df_personnel_biz.empty:
-    col_name_total = df_personnel_biz.columns[2]
-    valid_ra = df_personnel_biz.iloc[1:9].copy()
-    ra_actual_log_spent = pd.to_numeric(valid_ra[col_name_total], errors='coerce').sum()
-else:
-    ra_actual_log_spent = 258443.0
-
-ra_remaining = ra_budget - ra_actual_log_spent
-ra_progress = (ra_actual_log_spent / ra_budget * 100) if ra_budget > 0 else 0
 
 # 動態計算資本門各項目已核銷金額（從 df_capital 抓取）
 cap_df_raw = df_capital.iloc[1:12, [1, 2, 5]].copy()
@@ -260,34 +284,57 @@ if menu == "📌 總體經費摘要與支用比例":
         fig_bar = px.bar(door_summary_bar, x='經費門類', y=['預算金額', '已支用/核銷金額'], barmode='group', title="三大經費門類預算與支用對比")
         st.plotly_chart(fig_bar, use_container_width=True)
 
-# 2. 經常門統計（不顯示頂部總覽看板；單一圖示顯示經常門最主要核銷比例）
+# 2. 經常門統計：左邊最大圈圈（經常門總體），右邊小圈圈（人事 3 項 + 租金 4 項）
 elif menu == "💵 經常門統計 (含人事費與業務費)":
     st.header("💵 經常門經費統計 (含人事費與業務費/租金)")
 
     freq_budget = 48124541.0 + 19051087.48
     freq_spent = personnel_spent_100 + (130000 + 20000 + 7000 + 10000 + 90000 + 4200 + total_rent_spent)
-    freq_rem = max(freq_budget - freq_spent, 0.0)
-    freq_pct = (freq_spent / freq_budget * 100) if freq_budget > 0 else 0
 
-    fig_freq = px.pie(
-        pd.DataFrame({
-            '狀態': ['已核銷進度', '剩餘可用額度'],
-            '金額': [freq_spent, freq_rem]
-        }),
-        names='狀態',
-        values='金額',
-        hole=0.65,
-        color='狀態',
-        color_discrete_map={'已核銷進度': '#2ecc71', '剩餘可用額度': '#3a3d42'},
-        title="經常門整體核銷進度圖示"
-    )
-    fig_freq.update_traces(textinfo='percent', textfont_size=16)
-    fig_freq.add_annotation(
-        text=f"<b>{freq_pct:.1f}%</b><br>已核銷",
-        x=0.5, y=0.5, font_size=20, showarrow=False
-    )
-    fig_freq.update_layout(height=320, margin=dict(t=50, b=20, l=20, r=20))
-    st.plotly_chart(fig_freq, use_container_width=True)
+    left_col, right_col = st.columns([1.35, 2.65])
+
+    with left_col:
+        st.plotly_chart(
+            make_donut(
+                title="經常門總體核銷",
+                spent=freq_spent,
+                budget=freq_budget,
+                color_done='#2ecc71',
+                height=380,
+                title_size=18,
+                center_size=24,
+                show_legend=True
+            ),
+            use_container_width=True
+        )
+
+    with right_col:
+        freq_sub_items = [
+            ("碩士級研究助理", ra_budget_100, ra_budget_100, '#27ae60'),
+            ("留任與職涯獎金", bonus_retain_budget_100, bonus_retain_budget_100, '#27ae60'),
+            ("執行人員獎勵", bonus_exec_budget_100, bonus_exec_budget_100, '#27ae60'),
+            ("AI機器人租金", robot_rent_spent, 13642989.0, '#1abc9c'),
+            ("手術排程租金", surgery_rent_spent, 1757098.0, '#1abc9c'),
+            ("智管家App租金", app_rent_spent, 3163132.0, '#1abc9c'),
+            ("急診AI戰情租金", er_rent_spent, 226668.0, '#1abc9c'),
+        ]
+        r1 = st.columns(4)
+        for idx in range(4):
+            title, sp, bg, col = freq_sub_items[idx]
+            with r1[idx]:
+                st.plotly_chart(
+                    make_donut(title, sp, bg, col, height=180, title_size=13, center_size=14, show_legend=False),
+                    use_container_width=True
+                )
+
+        r2 = st.columns(4)
+        for idx in range(4, 7):
+            title, sp, bg, col = freq_sub_items[idx]
+            with r2[idx - 4]:
+                st.plotly_chart(
+                    make_donut(title, sp, bg, col, height=180, title_size=13, center_size=14, show_legend=False),
+                    use_container_width=True
+                )
 
     st.markdown("---")
 
@@ -320,29 +367,6 @@ elif menu == "💵 經常門統計 (含人事費與業務費)":
         columns=['項目', '預算金額 (NTD)', '已核銷金額 (NTD)', '核銷比例', '支用說明或編列基準']
     )
     st.dataframe(personnel_df, use_container_width=True)
-
-    st.markdown("---")
-    st.subheader("📋 二、研究助理經費核銷進度與比例追蹤（本單位流水紀錄參考）")
-    ra_tracking_df = pd.DataFrame([{
-        '項目': '碩士級研究助理 (薪資與三節獎金)',
-        '預算金額 (A)': f"NT$ {ra_budget:,.0f}",
-        '已核銷金額 (B)': f"NT$ {ra_actual_log_spent:,.0f}",
-        '剩餘可用額度 (C)': f"NT$ {ra_remaining:,.0f}",
-        '核銷執行進度 (%)': f"{ra_progress:.2f}%",
-        '備註說明': '上方「人事費支用與預算標準」已依指示列為 100.00% 核銷；此區為目前分頁流水紀錄參考'
-    }])
-    st.dataframe(ra_tracking_df, use_container_width=True)
-
-    st.markdown("### 📄 研究助理實際核銷流水明細表")
-    if not df_personnel_biz.empty:
-        display_ra_df = df_personnel_biz.copy()
-        col_t = display_ra_df.columns[2]
-        display_ra_df[col_t] = display_ra_df[col_t].apply(
-            lambda x: f"NT$ {x:,.0f}" if pd.notnull(x) and isinstance(x, (int, float)) else x
-        )
-        st.dataframe(display_ra_df, use_container_width=True)
-    else:
-        st.info("目前尚未偵測到「業務費-人事費」分頁資料。")
 
     st.markdown("---")
     st.subheader("🏢 三、業務費 - 四大租金專案執行與已核銷月份追蹤")
@@ -402,33 +426,55 @@ elif menu == "💵 經常門統計 (含人事費與業務費)":
     )
     st.dataframe(display_rent_df, use_container_width=True)
 
-# 3. 資本門統計（不顯示頂部總覽看板與沖帳追蹤看板；單一圖示顯示資本門最主要核銷比例）
+# 3. 資本門統計：左邊最大圈圈（資本門總體），右邊小圈圈（各系統名稱）
 elif menu == "🏢 資本門統計":
     st.header("🏢 資本門經費統計與設備採購追蹤")
 
     cap_budget = 18271539.0
-    cap_rem = max(cap_budget - total_cap_spent, 0.0)
-    cap_pct = (total_cap_spent / cap_budget * 100) if cap_budget > 0 else 0
 
-    fig_cap = px.pie(
-        pd.DataFrame({
-            '狀態': ['已核銷進度', '剩餘可用額度'],
-            '金額': [total_cap_spent, cap_rem]
-        }),
-        names='狀態',
-        values='金額',
-        hole=0.65,
-        color='狀態',
-        color_discrete_map={'已核銷進度': '#3498db', '剩餘可用額度': '#3a3d42'},
-        title="資本門整體核銷進度圖示"
-    )
-    fig_cap.update_traces(textinfo='percent', textfont_size=16)
-    fig_cap.add_annotation(
-        text=f"<b>{cap_pct:.1f}%</b><br>已核銷",
-        x=0.5, y=0.5, font_size=20, showarrow=False
-    )
-    fig_cap.update_layout(height=320, margin=dict(t=50, b=20, l=20, r=20))
-    st.plotly_chart(fig_cap, use_container_width=True)
+    left_col, right_col = st.columns([1.35, 2.65])
+
+    with left_col:
+        st.plotly_chart(
+            make_donut(
+                title="資本門總體核銷",
+                spent=total_cap_spent,
+                budget=cap_budget,
+                color_done='#3498db',
+                height=380,
+                title_size=18,
+                center_size=24,
+                show_legend=True
+            ),
+            use_container_width=True
+        )
+
+    with right_col:
+        cap_sub_items = [
+            ("AI排班與加班預測系統", ai_spent, 3570000.0, '#3498db'),
+            ("定位點班系統", loc_spent, 1960000.0, '#5dade2'),
+            ("iListen員工脈動平台", ilisten_spent, 720000.0, '#2980b9'),
+            ("全自動掃描機", scanner_spent, 3281539.0, '#3498db'),
+            ("智能磅秤", scale_spent, 740000.0, '#5dade2'),
+            ("ERP系統", erp_spent, 8000000.0, '#2980b9'),
+        ]
+        r1 = st.columns(3)
+        for idx in range(3):
+            title, sp, bg, col = cap_sub_items[idx]
+            with r1[idx]:
+                st.plotly_chart(
+                    make_donut(title, sp, bg, col, height=180, title_size=13, center_size=14, show_legend=False),
+                    use_container_width=True
+                )
+
+        r2 = st.columns(3)
+        for idx in range(3, 6):
+            title, sp, bg, col = cap_sub_items[idx]
+            with r2[idx - 3]:
+                st.plotly_chart(
+                    make_donut(title, sp, bg, col, height=180, title_size=13, center_size=14, show_legend=False),
+                    use_container_width=True
+                )
 
     st.markdown("---")
     st.subheader("📋 一、資本門 6 大合併項目核銷進度清單")
