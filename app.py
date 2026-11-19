@@ -108,7 +108,7 @@ def render_pie_bottom_right_time(time_str):
         unsafe_allow_html=True
     )
 
-# ==================== PDF 報表生成函式（修正文字重疊並移除第四個表格） ====================
+# ==================== PDF 報表生成函式 ====================
 def get_cjk_font_prop():
     candidates = [
         "NotoSansCJK-Regular.ttc",
@@ -392,30 +392,55 @@ if menu == "📌 總體經費摘要與支用比例":
     st.markdown("依據 **115.08 經費分配表**、**經費支用標準** 與最新 **114~115年度經費支用紀錄明細** 即時掌握經費動態。")
     st.markdown("---")
 
-    st.subheader("📌 核心經費總覽看板")
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        st.metric("範疇一總經費上限", "NT$ 85,447,167")
-    with col2:
-        st.metric("人事費總預算 (經常門)", "NT$ 48,124,541", "年底列為 100% 核銷")
-    with col3:
-        st.metric("業務費總預算 (含租金)", "NT$ 19,051,087")
-    with col4:
-        st.metric("資本門總預算", "NT$ 18,271,539")
+    # 1. 上方並排：範疇一總體經費使用比例圓環圖 + 三大經費門類預算與支用對比長條圖
+    shared_legend = dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5, title_text="")
+    shared_title = dict(font=dict(size=16), x=0.5, xanchor="center", y=0.96)
 
-    st.markdown("")
+    col_a, col_b = st.columns(2)
+    with col_a:
+        fig_tot = make_donut(
+            title="範疇一總體經費使用比例",
+            spent=total_spent_all,
+            budget=total_budget_all,
+            color_done='#2563EB',
+            height=350,
+            title_size=16,
+            center_size=22,
+            show_legend=True
+        )
+        fig_tot.update_traces(domain=dict(x=[0.12, 0.88], y=[0.10, 0.86]))
+        fig_tot.update_annotations(x=0.5, y=0.48)
+        fig_tot.update_layout(title=shared_title, legend=shared_legend, margin=dict(t=70, b=35, l=20, r=20))
+        st.plotly_chart(fig_tot, use_container_width=True)
 
-    st.subheader("📌 經費沖帳進度追蹤看板")
-    col5, col6, col7 = st.columns(3)
-    with col5:
-        st.metric("⏳ 待沖帳項目總額", f"NT$ {total_pending:,.0f}")
-    with col6:
-        st.metric("🔍 已沖帳總額 (E欄加總)", f"NT$ {total_chongzhang_quota:,.0f}")
-    with col7:
-        st.metric("📊 剩餘未沖帳金額", f"NT$ {remaining_unreimbursed:,.0f}", delta_color="inverse")
+    with col_b:
+        door_summary_bar = pd.DataFrame({
+            '經費門類': ['人事費 (經常門)', '業務費與租金 (經常門)', '資本門'],
+            '預算金額': [48124541.00, 19051087.48, 18271539.00],
+            '已支用/核銷金額': [p_spent, b_spent, c_spent]
+        })
+        fig_bar = px.bar(
+            door_summary_bar,
+            x='經費門類',
+            y=['預算金額', '已支用/核銷金額'],
+            barmode='group',
+            title="三大經費門類預算與支用對比"
+        )
+        fig_bar.update_layout(
+            height=350,
+            title=shared_title,
+            legend=shared_legend,
+            xaxis_title="",
+            yaxis_title="",
+            xaxis=dict(tickangle=0),
+            margin=dict(t=70, b=35, l=50, r=20)
+        )
+        st.plotly_chart(fig_bar, use_container_width=True)
 
     st.markdown("---")
-    st.header("📌 總體經費執行摘要與支用比例")
+
+    # 2. 中段：總體經費執行摘要與支用比例表格
+    st.subheader("📌 總體經費執行摘要與支用比例")
 
     total_remaining = total_budget_all - total_spent_all
     total_progress = (total_spent_all / total_budget_all * 100) if total_budget_all > 0 else 0
@@ -493,73 +518,17 @@ if menu == "📌 總體經費摘要與支用比例":
     </table>
     """
     st.markdown(html_table, unsafe_allow_html=True)
-    st.markdown("<br>", unsafe_allow_html=True)
+    st.markdown("---")
 
-    # 三張圖統一高度、上方水平圖例與上下邊距，確保完全水平對齊
-    shared_legend = dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5, title_text="")
-    shared_title = dict(font=dict(size=16), x=0.5, xanchor="center", y=0.96)
-
-    col_a, col_b, col_c = st.columns(3)
-    with col_a:
-        fig_tot = make_donut(
-            title="範疇一總體經費使用比例",
-            spent=total_spent_all,
-            budget=total_budget_all,
-            color_done='#2563EB',
-            height=380,
-            title_size=16,
-            center_size=22,
-            show_legend=True
-        )
-        fig_tot.update_traces(domain=dict(x=[0.1, 0.9], y=[0.14, 0.86]))
-        fig_tot.update_annotations(x=0.5, y=0.5)
-        fig_tot.update_layout(title=shared_title, legend=shared_legend, margin=dict(t=75, b=45, l=20, r=20))
-        st.plotly_chart(fig_tot, use_container_width=True)
-
-    with col_b:
-        door_summary_pie = pd.DataFrame({
-            '經費門類': ['人事費 (經常門)', '業務費與租金 (經常門)', '資本門'],
-            '預算金額': [48124541.00, 19051087.48, 18271539.00]
-        })
-        fig_pie = px.pie(
-            door_summary_pie,
-            names='經費門類',
-            values='預算金額',
-            title="三大經費門類預算分配佔比",
-            hole=0.4
-        )
-        fig_pie.update_traces(domain=dict(x=[0.1, 0.9], y=[0.14, 0.86]))
-        fig_pie.update_layout(
-            height=380,
-            title=shared_title,
-            legend=shared_legend,
-            margin=dict(t=75, b=45, l=20, r=20)
-        )
-        st.plotly_chart(fig_pie, use_container_width=True)
-
-    with col_c:
-        door_summary_bar = pd.DataFrame({
-            '經費門類': ['人事費 (經常門)', '業務費與租金 (經常門)', '資本門'],
-            '預算金額': [48124541.00, 19051087.48, 18271539.00],
-            '已支用/核銷金額': [p_spent, b_spent, c_spent]
-        })
-        fig_bar = px.bar(
-            door_summary_bar,
-            x='經費門類',
-            y=['預算金額', '已支用/核銷金額'],
-            barmode='group',
-            title="三大經費門類預算與支用對比"
-        )
-        fig_bar.update_layout(
-            height=380,
-            title=shared_title,
-            legend=shared_legend,
-            xaxis_title="",
-            yaxis_title="",
-            xaxis=dict(tickangle=-15),
-            margin=dict(t=75, b=45, l=45, r=20)
-        )
-        st.plotly_chart(fig_bar, use_container_width=True)
+    # 3. 最下方：經費沖帳進度追蹤看板 + 更新時間
+    st.subheader("📌 經費沖帳進度追蹤看板")
+    col5, col6, col7 = st.columns(3)
+    with col5:
+        st.metric("⏳ 待沖帳項目總額", f"NT$ {total_pending:,.0f}")
+    with col6:
+        st.metric("🔍 已沖帳總額 (E欄加總)", f"NT$ {total_chongzhang_quota:,.0f}")
+    with col7:
+        st.metric("📊 剩餘未沖帳金額", f"NT$ {remaining_unreimbursed:,.0f}", delta_color="inverse")
 
     render_pie_bottom_right_time(now_tw)
 
