@@ -1,6 +1,14 @@
+import os
+import io
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+import matplotlib.font_manager as fm
+from matplotlib.backends.backend_pdf import PdfPages
+from matplotlib.patches import FancyBboxPatch
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
@@ -100,73 +108,201 @@ def render_pie_bottom_right_time(time_str):
         unsafe_allow_html=True
     )
 
-def make_svg_donut(label, spent, budget, color_done='#2ecc71', size=110):
+# ==================== PDF 報表生成函式（含範疇一總體 + 經常門/資本門總體與各細項圓餅圖） ====================
+def get_cjk_font_prop():
+    candidates = [
+        "NotoSansCJK-Regular.ttc",
+        "NotoSansTC-Regular.otf",
+        "/usr/share/fonts/NotoSansCJK-Regular.ttc",
+        "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+        "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
+        "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
+        "C:/Windows/Fonts/msjh.ttc",
+        "/System/Library/Fonts/PingFang.ttc",
+    ]
+    for path in candidates:
+        if os.path.exists(path):
+            return fm.FontProperties(fname=path)
+    return fm.FontProperties()
+
+def draw_donut_ax(ax, title, spent, budget, color_done, fp, title_size=10, center_size=12, show_amounts=True):
+    rem = max(budget - spent, 0.0)
     pct = (spent / budget * 100) if budget > 0 else 0.0
-    clamped = min(max(pct, 0.0), 100.0)
-    r = 38
-    cx, cy = 55, 55
-    circ = 2 * 3.14159265 * r
-    dash = circ * (clamped / 100.0)
-    return f"""
-    <div style="display:inline-block;width:155px;margin:8px;text-align:center;vertical-align:top;font-family:sans-serif;">
-      <div style="font-size:12px;font-weight:600;color:#222;margin-bottom:4px;">{label}</div>
-      <svg width="{size}" height="{size}" viewBox="0 0 110 110">
-        <circle cx="{cx}" cy="{cy}" r="{r}" fill="none" stroke="#e5e7eb" stroke-width="12"/>
-        <circle cx="{cx}" cy="{cy}" r="{r}" fill="none" stroke="{color_done}" stroke-width="12"
-                stroke-dasharray="{dash:.1f} {circ:.1f}" transform="rotate(-90 {cx} {cy})"/>
-        <text x="{cx}" y="{cy+5}" text-anchor="middle" font-size="14" font-weight="bold" fill="#111">{pct:.1f}%</text>
-      </svg>
-      <div style="font-size:11px;color:#555;">已核銷 NT$ {spent:,.0f}</div>
-      <div style="font-size:11px;color:#777;">預算 NT$ {budget:,.0f}</div>
-    </div>
-    """
+    vals = [spent, rem] if (spent > 0 or rem > 0) else [0, 1]
+    ax.pie(
+        vals,
+        startangle=90,
+        counterclock=False,
+        colors=[color_done, "#E5E7EB"],
+        wedgeprops=dict(width=0.34, edgecolor="white", linewidth=1.2),
+    )
+    ax.text(0, 0.05, f"{pct:.1f}%", ha="center", va="center", fontsize=center_size, fontweight="bold", color="#111827", fontproperties=fp)
+    ax.text(0, -0.22, "已核銷", ha="center", va="center", fontsize=max(center_size - 4, 7), color="#6B7280", fontproperties=fp)
+    ax.set_title(title, fontsize=title_size, fontweight="bold", color="#1F2937", pad=6, fontproperties=fp)
+    if show_amounts:
+        ax.text(
+            0, -1.24,
+            f"已核銷 NT$ {spent:,.0f}\n預算 NT$ {budget:,.0f}",
+            ha="center", va="top", fontsize=7.5, color="#4B5563", fontproperties=fp
+        )
+    ax.set_aspect("equal")
 
-def build_html_report(time_str, freq_spent, freq_budget, freq_items, cap_spent, cap_budget, cap_items):
-    total_budget = 85447167.0
-    total_spent = freq_spent + cap_spent
-    total_pct = (total_spent / total_budget * 100) if total_budget > 0 else 0.0
+def generate_pdf_report_bytes(
+    now_str,
+    total_spent, total_budget,
+    freq_spent, freq_budget, freq_items,
+    cap_spent, cap_budget, cap_items,
+    summary_rows
+):
+    fp = get_cjk_font_prop()
+    buf = io.BytesIO()
+    with PdfPages(buf) as pdf:
+        # ==================== Page 1: 範疇一總體使用比例 + 經常門總體與各細項 ====================
+        fig1 = plt.figure(figsize=(11.69, 8.27), dpi=200)  # A4 橫式
+        fig1.patch.set_facecolor("#F8FAFC")
 
-    freq_svg_cards = "".join(make_svg_donut(n, s, b, c) for n, s, b, c in freq_items)
-    cap_svg_cards = "".join(make_svg_donut(n, s, b, c) for n, s, b, c in cap_items)
+        # 頂部深藍標題橫幅
+        header_box = FancyBboxPatch((0.03, 0.88), 0.94, 0.09, boxstyle="round,pad=0.01,rounding_size=0.015",
+                                    facecolor="#1E3A5F", edgecolor="none", transform=fig1.transFigure)
+        fig1.patches.append(header_box)
+        fig1.text(0.05, 0.935, "範疇一計畫經費執行與核銷進度報表", fontsize=17, fontweight="bold", color="white", fontproperties=fp)
+        fig1.text(0.05, 0.898, "健康台灣深耕計畫｜範疇一總體、經常門（人事費／業務費租金）與資本門執行總覽", fontsize=9.5, color="#CBD5E1", fontproperties=fp)
+        fig1.text(0.95, 0.905, f"更新時間：{now_str}", ha="right", fontsize=9.5, color="#E2E8F0", fontproperties=fp)
 
-    return f"""<!DOCTYPE html>
-<html lang="zh-Hant">
-<head>
-<meta charset="UTF-8">
-<title>範疇一經費核銷報告</title>
-<style>
-  body {{ font-family: "Microsoft JhengHei", Arial, sans-serif; margin: 28px; color: #222; background: #fff; }}
-  h1 {{ margin-bottom: 4px; }}
-  .meta {{ color: #666; font-size: 13px; margin-bottom: 20px; }}
-  .box {{ border: 1px solid #e5e7eb; border-radius: 10px; padding: 18px; margin-bottom: 22px; background: #fafafa; }}
-  .flex-wrap {{ display: flex; flex-wrap: wrap; align-items: flex-start; gap: 16px; }}
-  @media print {{ .no-print {{ display: none; }} }}
-</style>
-</head>
-<body>
-  <div class="no-print" style="margin-bottom:14px;">
-    <button onclick="window.print()" style="padding:8px 14px;font-size:14px;cursor:pointer;">🖨️ 列印 / 另存為 PDF</button>
-  </div>
-  <h1>📊 範疇一經費核銷報告</h1>
-  <div class="meta">更新時間：{time_str} ｜ 範疇一總核銷進度：{total_pct:.1f}%（已核銷 NT$ {total_spent:,.0f} / 預算 NT$ {total_budget:,.0f}）</div>
+        # 上半部卡片：左側【範疇一總體經費使用比例】 + 右側【關鍵數據摘要卡片與總表】
+        top_card = FancyBboxPatch((0.03, 0.50), 0.94, 0.35, boxstyle="round,pad=0.01,rounding_size=0.015",
+                                  facecolor="white", edgecolor="#E2E8F0", linewidth=1, transform=fig1.transFigure)
+        fig1.patches.append(top_card)
+        fig1.text(0.05, 0.82, "一、範疇一總體經費使用比例", fontsize=12, fontweight="bold", color="#0F172A", fontproperties=fp)
 
-  <div class="box">
-    <h2>💵 經常門總體與各細項圓餅圖</h2>
-    <div class="flex-wrap">
-      <div>{make_svg_donut("經常門總體核銷", freq_spent, freq_budget, "#2ecc71", size=140)}</div>
-      <div style="flex:1;">{freq_svg_cards}</div>
-    </div>
-  </div>
+        ax_tot = fig1.add_axes([0.05, 0.53, 0.24, 0.27])
+        draw_donut_ax(ax_tot, "範疇一總體核銷比例", total_spent, total_budget, "#2563EB", fp, title_size=11, center_size=16, show_amounts=True)
 
-  <div class="box">
-    <h2>🏢 資本門總體與各系統圓餅圖</h2>
-    <div class="flex-wrap">
-      <div>{make_svg_donut("資本門總體核銷", cap_spent, cap_budget, "#3498db", size=140)}</div>
-      <div style="flex:1;">{cap_svg_cards}</div>
-    </div>
-  </div>
-</body>
-</html>"""
+        kpis = [
+            ("範疇一總預算上限", f"NT$ {total_budget:,.0f}", "#1E293B", "#F1F5F9"),
+            ("累計已核銷金額", f"NT$ {total_spent:,.0f}", "#047857", "#ECFDF5"),
+            ("剩餘可用經費", f"NT$ {max(total_budget - total_spent, 0):,.0f}", "#B45309", "#FFFBEB"),
+        ]
+        for i, (k_title, k_val, fg_c, bg_c) in enumerate(kpis):
+            x0 = 0.33 + i * 0.21
+            kbox = FancyBboxPatch((x0, 0.72), 0.195, 0.095, boxstyle="round,pad=0.008,rounding_size=0.012",
+                                  facecolor=bg_c, edgecolor="#E2E8F0", linewidth=0.8, transform=fig1.transFigure)
+            fig1.patches.append(kbox)
+            fig1.text(x0 + 0.012, 0.785, k_title, fontsize=8.5, color="#475569", fontproperties=fp)
+            fig1.text(x0 + 0.012, 0.742, k_val, fontsize=11.5, fontweight="bold", color=fg_c, fontproperties=fp)
+
+        ax_tbl = fig1.add_axes([0.33, 0.52, 0.615, 0.18])
+        ax_tbl.axis("off")
+        tbl = ax_tbl.table(
+            cellText=summary_rows,
+            colLabels=["經費門類", "預算金額", "已核銷金額", "剩餘可用", "執行率"],
+            loc="center",
+            cellLoc="right",
+            colWidths=[0.30, 0.19, 0.19, 0.19, 0.13]
+        )
+        tbl.auto_set_font_size(False)
+        tbl.set_fontsize(8.5)
+        tbl.scale(1, 1.35)
+        for (r, c), cell in tbl.get_celld().items():
+            cell.get_text().set_fontproperties(fp)
+            cell.set_edgecolor("#E2E8F0")
+            if r == 0:
+                cell.set_facecolor("#1E3A5F")
+                cell.get_text().set_color("white")
+                cell.get_text().set_weight("bold")
+            elif r == len(summary_rows):
+                cell.set_facecolor("#EFF6FF")
+                cell.get_text().set_weight("bold")
+            else:
+                cell.set_facecolor("#FFFFFF" if r % 2 == 1 else "#F8FAFC")
+            if c == 0:
+                cell.get_text().set_ha("left")
+
+        # 下半部卡片：二、經常門總體與各細項圓餅圖
+        freq_card = FancyBboxPatch((0.03, 0.05), 0.94, 0.42, boxstyle="round,pad=0.01,rounding_size=0.015",
+                                   facecolor="white", edgecolor="#E2E8F0", linewidth=1, transform=fig1.transFigure)
+        fig1.patches.append(freq_card)
+        fig1.text(0.05, 0.44, "二、經常門經費執行比例（含人事費與業務費租金）", fontsize=12, fontweight="bold", color="#0F172A", fontproperties=fp)
+
+        ax_f_main = fig1.add_axes([0.045, 0.11, 0.21, 0.28])
+        draw_donut_ax(ax_f_main, "經常門總體核銷", freq_spent, freq_budget, "#10B981", fp, title_size=10.5, center_size=15, show_amounts=True)
+
+        for idx, (name, sp, bg, col) in enumerate(freq_items):
+            row_i = idx // 4
+            col_i = idx % 4
+            ax_sub = fig1.add_axes([0.28 + col_i * 0.17, 0.25 - row_i * 0.185, 0.145, 0.155])
+            draw_donut_ax(ax_sub, name, sp, bg, col, fp, title_size=8.5, center_size=10.5, show_amounts=True)
+
+        fig1.text(0.96, 0.022, f"第 1 頁 / 共 2 頁 ｜ 更新時間：{now_str}", ha="right", fontsize=8, color="#64748B", fontproperties=fp)
+        pdf.savefig(fig1)
+        plt.close(fig1)
+
+        # ==================== Page 2: 資本門總體與各系統圓餅圖 ====================
+        fig2 = plt.figure(figsize=(11.69, 8.27), dpi=200)
+        fig2.patch.set_facecolor("#F8FAFC")
+
+        header_box2 = FancyBboxPatch((0.03, 0.88), 0.94, 0.09, boxstyle="round,pad=0.01,rounding_size=0.015",
+                                     facecolor="#1E3A5F", edgecolor="none", transform=fig2.transFigure)
+        fig2.patches.append(header_box2)
+        fig2.text(0.05, 0.935, "範疇一計畫經費執行與核銷進度報表（續）", fontsize=17, fontweight="bold", color="white", fontproperties=fp)
+        fig2.text(0.05, 0.898, "三、資本門設備與資訊系統採購核銷進度明細", fontsize=9.5, color="#CBD5E1", fontproperties=fp)
+        fig2.text(0.95, 0.905, f"更新時間：{now_str}", ha="right", fontsize=9.5, color="#E2E8F0", fontproperties=fp)
+
+        cap_card = FancyBboxPatch((0.03, 0.36), 0.94, 0.49, boxstyle="round,pad=0.01,rounding_size=0.015",
+                                  facecolor="white", edgecolor="#E2E8F0", linewidth=1, transform=fig2.transFigure)
+        fig2.patches.append(cap_card)
+        fig2.text(0.05, 0.82, "三、資本門總體與 6 大系統採購核銷比例", fontsize=12, fontweight="bold", color="#0F172A", fontproperties=fp)
+
+        ax_c_main = fig2.add_axes([0.05, 0.44, 0.24, 0.32])
+        draw_donut_ax(ax_c_main, "資本門總體核銷", cap_spent, cap_budget, "#3B82F6", fp, title_size=11, center_size=16, show_amounts=True)
+
+        for idx, (name, sp, bg, col) in enumerate(cap_items):
+            row_i = idx // 3
+            col_i = idx % 3
+            ax_sub = fig2.add_axes([0.33 + col_i * 0.21, 0.61 - row_i * 0.22, 0.17, 0.18])
+            draw_donut_ax(ax_sub, name, sp, bg, col, fp, title_size=9, center_size=11.5, show_amounts=True)
+
+        cap_tbl_card = FancyBboxPatch((0.03, 0.05), 0.94, 0.28, boxstyle="round,pad=0.01,rounding_size=0.015",
+                                      facecolor="white", edgecolor="#E2E8F0", linewidth=1, transform=fig2.transFigure)
+        fig2.patches.append(cap_tbl_card)
+        fig2.text(0.05, 0.30, "四、資本門各系統預算與核銷金額對照表", fontsize=11.5, fontweight="bold", color="#0F172A", fontproperties=fp)
+
+        cap_rows = []
+        for name, sp, bg, _ in cap_items:
+            rem = max(bg - sp, 0.0)
+            pct = (sp / bg * 100) if bg > 0 else 0.0
+            cap_rows.append([name, f"NT$ {bg:,.0f}", f"NT$ {sp:,.0f}", f"NT$ {rem:,.0f}", f"{pct:.2f}%"])
+
+        ax_ctbl = fig2.add_axes([0.05, 0.07, 0.90, 0.21])
+        ax_ctbl.axis("off")
+        ctbl = ax_ctbl.table(
+            cellText=cap_rows,
+            colLabels=["資本門系統項目", "預算編列金額", "已核銷金額", "剩餘可用額度", "核銷進度"],
+            loc="center",
+            cellLoc="right",
+            colWidths=[0.30, 0.19, 0.19, 0.19, 0.13]
+        )
+        ctbl.auto_set_font_size(False)
+        ctbl.set_fontsize(8.5)
+        ctbl.scale(1, 1.32)
+        for (r, c), cell in ctbl.get_celld().items():
+            cell.get_text().set_fontproperties(fp)
+            cell.set_edgecolor("#E2E8F0")
+            if r == 0:
+                cell.set_facecolor("#1E3A5F")
+                cell.get_text().set_color("white")
+                cell.get_text().set_weight("bold")
+            else:
+                cell.set_facecolor("#FFFFFF" if r % 2 == 1 else "#F8FAFC")
+            if c == 0:
+                cell.get_text().set_ha("left")
+
+        fig2.text(0.96, 0.022, f"第 2 頁 / 共 2 頁 ｜ 更新時間：{now_str}", ha="right", fontsize=8, color="#64748B", fontproperties=fp)
+        pdf.savefig(fig2)
+        plt.close(fig2)
+
+    buf.seek(0)
+    return buf.getvalue()
 
 # ==================== 側邊欄導航 ====================
 st.sidebar.header("🔍 系統導航")
@@ -230,40 +366,58 @@ er_rent_spent = rent_df_raw[rent_df_raw['品名'].astype(str).str.contains('急�
 
 total_rent_spent = robot_rent_spent + surgery_rent_spent + app_rent_spent + er_rent_spent
 
+# 彙總數據供畫面與 PDF 報表共用
+p_spent = personnel_spent_100
+b_spent = 130000 + 20000 + 7000 + 10000 + 90000 + 4200 + total_rent_spent
+c_spent = total_cap_spent
+total_spent_all = p_spent + b_spent + c_spent
+total_budget_all = 85447167.00
+
 freq_budget_all = 48124541.0 + 19051087.48
-freq_spent_all = personnel_spent_100 + (130000 + 20000 + 7000 + 10000 + 90000 + 4200 + total_rent_spent)
+freq_spent_all = p_spent + b_spent
 cap_budget_all = 18271539.0
 
 freq_sub_items = [
-    ("碩士級研究助理", ra_budget_100, ra_budget_100, '#27ae60'),
-    ("留任與職涯獎金", bonus_retain_budget_100, bonus_retain_budget_100, '#27ae60'),
-    ("執行人員獎勵", bonus_exec_budget_100, bonus_exec_budget_100, '#27ae60'),
-    ("AI機器人租金", robot_rent_spent, 13642989.0, '#1abc9c'),
-    ("手術排程租金", surgery_rent_spent, 1757098.0, '#1abc9c'),
-    ("智管家App租金", app_rent_spent, 3163132.0, '#1abc9c'),
-    ("急診AI戰情租金", er_rent_spent, 226668.0, '#1abc9c'),
+    ("碩士級研究助理", ra_budget_100, ra_budget_100, '#10B981'),
+    ("留任與職涯獎金", bonus_retain_budget_100, bonus_retain_budget_100, '#10B981'),
+    ("執行人員獎勵", bonus_exec_budget_100, bonus_exec_budget_100, '#10B981'),
+    ("AI機器人租金", robot_rent_spent, 13642989.0, '#14B8A6'),
+    ("手術排程租金", surgery_rent_spent, 1757098.0, '#14B8A6'),
+    ("智管家App租金", app_rent_spent, 3163132.0, '#14B8A6'),
+    ("急診AI戰情租金", er_rent_spent, 226668.0, '#14B8A6'),
 ]
 
 cap_sub_items = [
-    ("AI排班與加班預測系統", ai_spent, 3570000.0, '#3498db'),
-    ("定位點班系統", loc_spent, 1960000.0, '#5dade2'),
-    ("iListen員工脈動平台", ilisten_spent, 720000.0, '#2980b9'),
-    ("全自動掃描機", scanner_spent, 3281539.0, '#3498db'),
-    ("智能磅秤", scale_spent, 740000.0, '#5dade2'),
-    ("ERP系統", erp_spent, 8000000.0, '#2980b9'),
+    ("AI排班與加班預測系統", ai_spent, 3570000.0, '#3B82F6'),
+    ("定位點班系統", loc_spent, 1960000.0, '#60A5FA'),
+    ("iListen員工脈動平台", ilisten_spent, 720000.0, '#2563EB'),
+    ("全自動掃描機", scanner_spent, 3281539.0, '#3B82F6'),
+    ("智能磅秤", scale_spent, 740000.0, '#60A5FA'),
+    ("ERP系統", erp_spent, 8000000.0, '#2563EB'),
 ]
 
+summary_table_rows = [
+    ["人事費 (經常門)", "NT$ 48,124,541", f"NT$ {p_spent:,.0f}", f"NT$ {48124541 - p_spent:,.0f}", "100.00%"],
+    ["業務費與租金 (經常門)", "NT$ 19,051,087", f"NT$ {b_spent:,.0f}", f"NT$ {19051087.48 - b_spent:,.0f}", f"{(b_spent / 19051087.48 * 100):.2f}%"],
+    ["資本門", "NT$ 18,271,539", f"NT$ {c_spent:,.0f}", f"NT$ {18271539 - c_spent:,.0f}", f"{(c_spent / 18271539 * 100):.2f}%"],
+    ["範疇一總經費合計", f"NT$ {total_budget_all:,.0f}", f"NT$ {total_spent_all:,.0f}", f"NT$ {total_budget_all - total_spent_all:,.0f}", f"{(total_spent_all / total_budget_all * 100):.2f}%"],
+]
+
+# ==================== 側邊欄一鍵匯出 PDF 核銷報表 ====================
 st.sidebar.markdown("---")
-st.sidebar.subheader("📄 匯報報告輸出")
-html_report_content = build_html_report(
-    now_tw, freq_spent_all, freq_budget_all, freq_sub_items,
-    total_cap_spent, cap_budget_all, cap_sub_items
+st.sidebar.subheader("📄 匯報報表輸出")
+pdf_report_bytes = generate_pdf_report_bytes(
+    now_tw,
+    total_spent_all, total_budget_all,
+    freq_spent_all, freq_budget_all, freq_sub_items,
+    c_spent, cap_budget_all, cap_sub_items,
+    summary_table_rows
 )
 st.sidebar.download_button(
-    label="📥 下載核銷報告 (含總體與各細項圓餅圖)",
-    data=html_report_content.encode("utf-8"),
-    file_name=f"範疇一經費核銷報告_{datetime.now(ZoneInfo('Asia/Taipei')).strftime('%Y%m%d_%H%M')}.html",
-    mime="text/html",
+    label="📥 下載 PDF 核銷報表",
+    data=pdf_report_bytes,
+    file_name=f"範疇一經費核銷報表_{datetime.now(ZoneInfo('Asia/Taipei')).strftime('%Y%m%d_%H%M')}.pdf",
+    mime="application/pdf",
     use_container_width=True
 )
 
@@ -298,13 +452,8 @@ if menu == "📌 總體經費摘要與支用比例":
     st.markdown("---")
     st.header("📌 總體經費執行摘要與支用比例")
 
-    p_spent = personnel_spent_100
-    b_spent = 130000 + 20000 + 7000 + 10000 + 90000 + 4200 + total_rent_spent
-    c_spent = total_cap_spent
-    total_spent = p_spent + b_spent + c_spent
-    total_budget = 85447167.00
-    total_remaining = total_budget - total_spent
-    total_progress = (total_spent / total_budget * 100) if total_budget > 0 else 0
+    total_remaining = total_budget_all - total_spent_all
+    total_progress = (total_spent_all / total_budget_all * 100) if total_budget_all > 0 else 0
 
     html_table = f"""
     <style>
@@ -371,8 +520,8 @@ if menu == "📌 總體經費摘要與支用比例":
       </tr>
       <tr class="total-row">
         <td>📌 範疇一總經費合計</td>
-        <td>NT$ {total_budget:,.2f}</td>
-        <td>NT$ {total_spent:,.2f}</td>
+        <td>NT$ {total_budget_all:,.2f}</td>
+        <td>NT$ {total_spent_all:,.2f}</td>
         <td>NT$ {total_remaining:,.2f}</td>
         <td>{total_progress:.2f}%</td>
       </tr>
@@ -381,15 +530,29 @@ if menu == "📌 總體經費摘要與支用比例":
     st.markdown(html_table, unsafe_allow_html=True)
     st.markdown("<br>", unsafe_allow_html=True)
 
-    col_a, col_b = st.columns(2)
+    col_a, col_b, col_c = st.columns(3)
     with col_a:
+        st.plotly_chart(
+            make_donut(
+                title="範疇一總體經費使用比例",
+                spent=total_spent_all,
+                budget=total_budget_all,
+                color_done='#2563EB',
+                height=320,
+                title_size=16,
+                center_size=22,
+                show_legend=True
+            ),
+            use_container_width=True
+        )
+    with col_b:
         door_summary_pie = pd.DataFrame({
             '經費門類': ['人事費 (經常門)', '業務費與租金 (經常門)', '資本門'],
             '預算金額': [48124541.00, 19051087.48, 18271539.00]
         })
         fig_pie = px.pie(door_summary_pie, names='經費門類', values='預算金額', title="三大經費門類預算分配佔比", hole=0.4)
         st.plotly_chart(fig_pie, use_container_width=True)
-    with col_b:
+    with col_c:
         door_summary_bar = pd.DataFrame({
             '經費門類': ['人事費 (經常門)', '業務費與租金 (經常門)', '資本門'],
             '預算金額': [48124541.00, 19051087.48, 18271539.00],
@@ -397,6 +560,8 @@ if menu == "📌 總體經費摘要與支用比例":
         })
         fig_bar = px.bar(door_summary_bar, x='經費門類', y=['預算金額', '已支用/核銷金額'], barmode='group', title="三大經費門類預算與支用對比")
         st.plotly_chart(fig_bar, use_container_width=True)
+
+    render_pie_bottom_right_time(now_tw)
 
 # 2. 經常門統計
 elif menu == "💵 經常門統計 (含人事費與業務費)":
