@@ -161,7 +161,6 @@ def generate_pdf_report_bytes(
         fig1 = plt.figure(figsize=(11.69, 8.27), dpi=200)  # A4 橫式
         fig1.patch.set_facecolor("#F8FAFC")
 
-        # 頂部深藍標題橫幅
         header_box = FancyBboxPatch((0.03, 0.89), 0.94, 0.08, boxstyle="round,pad=0.01,rounding_size=0.015",
                                     facecolor="#1E3A5F", edgecolor="none", transform=fig1.transFigure, zorder=-1)
         fig1.patches.append(header_box)
@@ -169,7 +168,6 @@ def generate_pdf_report_bytes(
         fig1.text(0.05, 0.905, "健康台灣深耕計畫｜範疇一總體、經常門（人事費／業務費租金）與資本門執行總覽", fontsize=9, color="#CBD5E1", fontproperties=fp, zorder=5)
         fig1.text(0.95, 0.912, f"更新時間：{now_str}", ha="right", fontsize=9, color="#E2E8F0", fontproperties=fp, zorder=5)
 
-        # 上半部卡片：一、範疇一總體經費使用比例
         top_card = FancyBboxPatch((0.03, 0.52), 0.94, 0.34, boxstyle="round,pad=0.01,rounding_size=0.015",
                                   facecolor="white", edgecolor="#E2E8F0", linewidth=1, transform=fig1.transFigure, zorder=-1)
         fig1.patches.append(top_card)
@@ -218,7 +216,6 @@ def generate_pdf_report_bytes(
             if c == 0:
                 cell.get_text().set_ha("left")
 
-        # 下半部卡片：二、經常門總體與各細項圓餅圖
         freq_card = FancyBboxPatch((0.03, 0.045), 0.94, 0.445, boxstyle="round,pad=0.01,rounding_size=0.015",
                                    facecolor="white", edgecolor="#E2E8F0", linewidth=1, transform=fig1.transFigure, zorder=-1)
         fig1.patches.append(freq_card)
@@ -227,7 +224,7 @@ def generate_pdf_report_bytes(
         ax_f_main = fig1.add_axes([0.045, 0.145, 0.21, 0.25], zorder=2)
         draw_donut_ax(ax_f_main, "經常門總體核銷", freq_spent, freq_budget, "#10B981", fp, title_size=10, center_size=14.5, show_amounts=True)
 
-        for idx, (name, sp, bg, col) in enumerate(freq_items):
+        for idx, (name, sp, bg, col) in enumerate(freq_items[:7]):
             row_i = idx // 4
             col_i = idx % 4
             ax_sub = fig1.add_axes([0.28 + col_i * 0.17, 0.305 - row_i * 0.20, 0.145, 0.115], zorder=2)
@@ -237,7 +234,7 @@ def generate_pdf_report_bytes(
         pdf.savefig(fig1)
         plt.close(fig1)
 
-        # ==================== Page 2: 資本門總體與 6 大系統採購圓餅圖（已移除第四個表格） ====================
+        # ==================== Page 2: 資本門總體與 6 大系統採購圓餅圖 ====================
         fig2 = plt.figure(figsize=(11.69, 8.27), dpi=200)
         fig2.patch.set_facecolor("#F8FAFC")
 
@@ -260,7 +257,7 @@ def generate_pdf_report_bytes(
             row_i = idx // 3
             col_i = idx % 3
             ax_sub = fig2.add_axes([0.34 + col_i * 0.21, 0.55 - row_i * 0.35, 0.175, 0.21], zorder=2)
-            draw_donut_ax(ax_sub, name, sp, bg, col, fp, title_size=9.5, center_size=12, show_amounts=True)
+            draw_donut_ax(ax_sub, f"{idx + 1}. {name}", sp, bg, col, fp, title_size=9.5, center_size=12, show_amounts=True)
 
         fig2.text(0.96, 0.025, f"第 2 頁 / 共 2 頁 ｜ 更新時間：{now_str}", ha="right", fontsize=8, color="#64748B", fontproperties=fp, zorder=5)
         pdf.savefig(fig2)
@@ -331,9 +328,20 @@ er_rent_spent = rent_df_raw[rent_df_raw['品名'].astype(str).str.contains('急�
 
 total_rent_spent = robot_rent_spent + surgery_rent_spent + app_rent_spent + er_rent_spent
 
+# 業務費各細項預算與已核銷金額
+actual_spent = all_details.groupby(cat_col)[total_amt_col].sum().to_dict()
+biz_budget_dict = {
+    '餐費': 130000.0,
+    '雜支費': 20000.0,
+    '文具紙張': 7000.0,
+    '印刷': 10000.0,
+    '出席費': 90000.0,
+    '國內旅費': 4200.0,
+}
+
 # 彙總數據供畫面與 PDF 報表共用
 p_spent = personnel_spent_100
-b_spent = 130000 + 20000 + 7000 + 10000 + 90000 + 4200 + total_rent_spent
+b_spent = sum(biz_budget_dict.values()) + total_rent_spent
 c_spent = total_cap_spent
 total_spent_all = p_spent + b_spent + c_spent
 total_budget_all = 85447167.00
@@ -342,15 +350,25 @@ freq_budget_all = 48124541.0 + 19051087.48
 freq_spent_all = p_spent + b_spent
 cap_budget_all = 18271539.0
 
-freq_sub_items = [
+freq_row1_items = [
     ("碩士級研究助理", ra_budget_100, ra_budget_100, '#10B981'),
     ("留任與職涯獎金", bonus_retain_budget_100, bonus_retain_budget_100, '#10B981'),
     ("執行人員獎勵", bonus_exec_budget_100, bonus_exec_budget_100, '#10B981'),
+]
+
+freq_row2_rent_items = [
     ("AI機器人租金", robot_rent_spent, 13642989.0, '#14B8A6'),
     ("手術排程租金", surgery_rent_spent, 1757098.0, '#14B8A6'),
     ("智管家App租金", app_rent_spent, 3163132.0, '#14B8A6'),
     ("急診AI戰情租金", er_rent_spent, 226668.0, '#14B8A6'),
 ]
+
+freq_row3_biz_items = [
+    (item_name, actual_spent.get(item_name, 0.0), b_amt, '#0EA5E9')
+    for item_name, b_amt in biz_budget_dict.items()
+]
+
+freq_sub_items = freq_row1_items + freq_row2_rent_items
 
 cap_sub_items = [
     ("AI排班與加班預測系統", ai_spent, 3570000.0, '#3B82F6'),
@@ -392,7 +410,6 @@ if menu == "📌 總體經費摘要與支用比例":
     st.markdown("依據 **115.08 經費分配表**、**經費支用標準** 與最新 **114~115年度經費支用紀錄明細** 即時掌握經費動態。")
     st.markdown("---")
 
-    # 1. 上方並排：範疇一總體經費使用比例圓環圖 + 三大經費門類預算與支用對比長條圖
     shared_legend = dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5, title_text="")
     shared_title = dict(font=dict(size=16), x=0.5, xanchor="center", y=0.96)
 
@@ -414,17 +431,25 @@ if menu == "📌 總體經費摘要與支用比例":
         st.plotly_chart(fig_tot, use_container_width=True)
 
     with col_b:
-        door_summary_bar = pd.DataFrame({
-            '經費門類': ['人事費 (經常門)', '業務費與租金 (經常門)', '資本門'],
-            '預算金額': [48124541.00, 19051087.48, 18271539.00],
-            '已支用/核銷金額': [p_spent, b_spent, c_spent]
-        })
+        door_summary_bar = pd.DataFrame([
+            {'經費門類': '人事費 (經常門)', '項目': '預算金額', '金額': 48124541.00},
+            {'經費門類': '人事費 (經常門)', '項目': '已支用/核銷金額', '金額': p_spent},
+            {'經費門類': '業務費與租金 (經常門)', '項目': '預算金額', '金額': 19051087.48},
+            {'經費門類': '業務費與租金 (經常門)', '項目': '已支用/核銷金額', '金額': b_spent},
+            {'經費門類': '資本門', '項目': '預算金額', '金額': 18271539.00},
+            {'經費門類': '資本門', '項目': '已支用/核銷金額', '金額': c_spent},
+        ])
         fig_bar = px.bar(
             door_summary_bar,
             x='經費門類',
-            y=['預算金額', '已支用/核銷金額'],
+            y='金額',
+            color='項目',
             barmode='group',
-            title="三大經費門類預算與支用對比"
+            title="三大經費門類預算與支用對比",
+            color_discrete_map={'預算金額': '#7CC6FE', '已支用/核銷金額': '#0066CC'}
+        )
+        fig_bar.update_traces(
+            hovertemplate='<b>%{x}</b><br>%{fullData.name}：NT$ %{y:,.0f}<extra></extra>'
         )
         fig_bar.update_layout(
             height=350,
@@ -438,8 +463,6 @@ if menu == "📌 總體經費摘要與支用比例":
         st.plotly_chart(fig_bar, use_container_width=True)
 
     st.markdown("---")
-
-    # 2. 中段：總體經費執行摘要與支用比例表格
     st.subheader("📌 總體經費執行摘要與支用比例")
 
     total_remaining = total_budget_all - total_spent_all
@@ -490,29 +513,29 @@ if menu == "📌 總體經費摘要與支用比例":
       <tr>
         <td>人事費 (經常門，年底 100% 核銷)</td>
         <td>NT$ 48,124,541</td>
-        <td>NT$ {p_spent:,.2f}</td>
-        <td>NT$ {48124541 - p_spent:,.2f}</td>
+        <td>NT$ {p_spent:,.0f}</td>
+        <td>NT$ {48124541 - p_spent:,.0f}</td>
         <td>100.00%</td>
       </tr>
       <tr>
         <td>業務費與租金 (經常門)</td>
-        <td>NT$ 19,051,087.48</td>
-        <td>NT$ {b_spent:,.2f}</td>
-        <td>NT$ {19051087.48 - b_spent:,.2f}</td>
+        <td>NT$ 19,051,087</td>
+        <td>NT$ {b_spent:,.0f}</td>
+        <td>NT$ {19051087.48 - b_spent:,.0f}</td>
         <td>{(b_spent / 19051087.48 * 100):.2f}%</td>
       </tr>
       <tr>
         <td>資本門</td>
         <td>NT$ 18,271,539</td>
-        <td>NT$ {c_spent:,.2f}</td>
-        <td>NT$ {18271539 - c_spent:,.2f}</td>
+        <td>NT$ {c_spent:,.0f}</td>
+        <td>NT$ {18271539 - c_spent:,.0f}</td>
         <td>{(c_spent / 18271539 * 100):.2f}%</td>
       </tr>
       <tr class="total-row">
         <td>📌 範疇一總經費合計</td>
-        <td>NT$ {total_budget_all:,.2f}</td>
-        <td>NT$ {total_spent_all:,.2f}</td>
-        <td>NT$ {total_remaining:,.2f}</td>
+        <td>NT$ {total_budget_all:,.0f}</td>
+        <td>NT$ {total_spent_all:,.0f}</td>
+        <td>NT$ {total_remaining:,.0f}</td>
         <td>{total_progress:.2f}%</td>
       </tr>
     </table>
@@ -520,7 +543,6 @@ if menu == "📌 總體經費摘要與支用比例":
     st.markdown(html_table, unsafe_allow_html=True)
     st.markdown("---")
 
-    # 3. 最下方：經費沖帳進度追蹤看板 + 更新時間
     st.subheader("📌 經費沖帳進度追蹤看板")
     col5, col6, col7 = st.columns(3)
     with col5:
@@ -536,7 +558,7 @@ if menu == "📌 總體經費摘要與支用比例":
 elif menu == "💵 經常門統計 (含人事費與業務費)":
     st.header("💵 經常門經費統計 (含人事費與業務費/租金)")
 
-    left_col, right_col = st.columns([1.35, 2.65])
+    left_col, right_col = st.columns([1.3, 2.7])
 
     with left_col:
         st.plotly_chart(
@@ -545,7 +567,7 @@ elif menu == "💵 經常門統計 (含人事費與業務費)":
                 spent=freq_spent_all,
                 budget=freq_budget_all,
                 color_done='#2ecc71',
-                height=380,
+                height=520,
                 title_size=18,
                 center_size=24,
                 show_legend=True
@@ -555,20 +577,34 @@ elif menu == "💵 經常門統計 (含人事費與業務費)":
 
     with right_col:
         r1 = st.columns(4)
-        for idx in range(4):
-            title, sp, bg, col = freq_sub_items[idx]
+        for idx, (title, sp, bg, col) in enumerate(freq_row1_items):
             with r1[idx]:
                 st.plotly_chart(
-                    make_donut(title, sp, bg, col, height=180, title_size=13, center_size=14, show_legend=False),
+                    make_donut(title, sp, bg, col, height=175, title_size=13, center_size=14, show_legend=False),
                     use_container_width=True
                 )
 
         r2 = st.columns(4)
-        for idx in range(4, 7):
-            title, sp, bg, col = freq_sub_items[idx]
-            with r2[idx - 4]:
+        for idx, (title, sp, bg, col) in enumerate(freq_row2_rent_items):
+            with r2[idx]:
                 st.plotly_chart(
-                    make_donut(title, sp, bg, col, height=180, title_size=13, center_size=14, show_legend=False),
+                    make_donut(title, sp, bg, col, height=175, title_size=13, center_size=14, show_legend=False),
+                    use_container_width=True
+                )
+
+        r3_top = st.columns(3)
+        for idx, (title, sp, bg, col) in enumerate(freq_row3_biz_items[:3]):
+            with r3_top[idx]:
+                st.plotly_chart(
+                    make_donut(title, sp, bg, col, height=170, title_size=13, center_size=14, show_legend=False),
+                    use_container_width=True
+                )
+
+        r3_bot = st.columns(3)
+        for idx, (title, sp, bg, col) in enumerate(freq_row3_biz_items[3:]):
+            with r3_bot[idx]:
+                st.plotly_chart(
+                    make_donut(title, sp, bg, col, height=170, title_size=13, center_size=14, show_legend=False),
                     use_container_width=True
                 )
 
@@ -603,6 +639,7 @@ elif menu == "💵 經常門統計 (含人事費與業務費)":
         personnel_data,
         columns=['項目', '預算金額 (NTD)', '已核銷金額 (NTD)', '核銷比例', '支用說明或編列基準']
     )
+    personnel_df.index = range(1, len(personnel_df) + 1)
     st.dataframe(personnel_df, use_container_width=True)
 
     st.markdown("---")
@@ -621,22 +658,21 @@ elif menu == "💵 經常門統計 (含人事費與業務費)":
         prog = (s_val / b_val * 100) if b_val > 0 else 0
         rent_stats.append({
             '租金專案項目': name,
-            '預算金額 (A)': f"NT$ {b_val:,.2f}" if b_val % 1 != 0 else f"NT$ {b_val:,.0f}",
-            '已核銷金額 (B)': f"NT$ {s_val:,.2f}" if s_val % 1 != 0 else f"NT$ {s_val:,.0f}",
-            '剩餘可用額度 (C)': f"NT$ {rem_val:,.2f}" if rem_val % 1 != 0 else f"NT$ {rem_val:,.0f}",
+            '預算金額 (A)': f"NT$ {b_val:,.0f}",
+            '已核銷金額 (B)': f"NT$ {s_val:,.0f}",
+            '剩餘可用額度 (C)': f"NT$ {rem_val:,.0f}",
             '已核銷月份': months,
             '核銷執行進度 (%)': f"{prog:.2f}%",
             '說明': desc
         })
     df_rent_tracking = pd.DataFrame(rent_stats)
+    df_rent_tracking.index = range(1, len(df_rent_tracking) + 1)
     st.dataframe(df_rent_tracking, use_container_width=True)
 
     st.markdown("---")
     st.subheader("📊 四、業務費各細項實際執行狀況與餘額統計")
-    actual_spent = all_details.groupby(cat_col)[total_amt_col].sum().to_dict()
-
     biz_stats = []
-    budget_dict = {'餐費': 130000, '雜支費': 20000, '文具紙張': 7000, '印刷': 10000, '出席費': 90000, '國內旅費': 4200, '租金': 18789974}
+    budget_dict = {**biz_budget_dict, '租金': 18789974.0}
 
     for item_name, b_amt in budget_dict.items():
         spent = actual_spent.get(item_name, 0.0)
@@ -647,12 +683,13 @@ elif menu == "💵 經常門統計 (含人事費與業務費)":
         biz_stats.append({
             '項目': item_name,
             '預算金額 (A)': f"NT$ {b_amt:,.0f}",
-            '已核銷支出 (B)': f"NT$ {spent:,.2f}" if spent % 1 != 0 else f"NT$ {spent:,.0f}",
-            '剩餘可用餘額 (C)': f"NT$ {remaining:,.2f}" if remaining % 1 != 0 else f"NT$ {remaining:,.0f}",
+            '已核銷支出 (B)': f"NT$ {spent:,.0f}",
+            '剩餘可用餘額 (C)': f"NT$ {remaining:,.0f}",
             '執行進度 (%)': f"{progress:.2f}%"
         })
 
     df_biz_stats = pd.DataFrame(biz_stats)
+    df_biz_stats.index = range(1, len(df_biz_stats) + 1)
     st.dataframe(df_biz_stats, use_container_width=True)
 
     st.markdown("### 🏢 業務費 - 租金細項執行清單")
@@ -661,6 +698,7 @@ elif menu == "💵 經常門統計 (含人事費與業務費)":
     display_rent_df['核銷金額(F欄)'] = display_rent_df['核銷金額(F欄)'].apply(
         lambda x: f"NT$ {x:,.0f}" if pd.notnull(x) and isinstance(x, (int, float)) else x
     )
+    display_rent_df.index = range(1, len(display_rent_df) + 1)
     st.dataframe(display_rent_df, use_container_width=True)
 
 # 3. 資本門統計
@@ -723,13 +761,14 @@ elif menu == "🏢 資本門統計":
         prog = (s_val / b_val * 100) if b_val > 0 else 0
         cap_stats.append({
             '資本門專案項目': name,
-            '預算編列金額 (A)': f"NT$ {b_val:,.2f}" if b_val % 1 != 0 else f"NT$ {b_val:,.0f}",
-            '已核銷金額 (B)': f"NT$ {s_val:,.2f}" if s_val % 1 != 0 else f"NT$ {s_val:,.0f}",
-            '剩餘可用額度 (C)': f"NT$ {rem_val:,.2f}" if rem_val % 1 != 0 else f"NT$ {rem_val:,.0f}",
+            '預算編列金額 (A)': f"NT$ {b_val:,.0f}",
+            '已核銷金額 (B)': f"NT$ {s_val:,.0f}",
+            '剩餘可用額度 (C)': f"NT$ {rem_val:,.0f}",
             '核銷執行進度 (%)': f"{prog:.2f}%",
             '備註說明': desc
         })
     df_cap_tracking = pd.DataFrame(cap_stats)
+    df_cap_tracking.index = range(1, len(df_cap_tracking) + 1)
     st.dataframe(df_cap_tracking, use_container_width=True)
 
     st.markdown("---")
@@ -737,6 +776,7 @@ elif menu == "🏢 資本門統計":
     cap_df = df_capital.iloc[1:12, [0, 1, 2, 3, 4, 5, 6, 7, 8]].copy()
     cap_df.columns = ['發票開立日期', '發票號碼', '品名', '數量', '單價', '總計(含稅)', '核銷單列印日期', '核銷案號', '說明/備註']
     cap_df['總計(含稅)'] = cap_df['總計(含稅)'].apply(lambda x: f"NT$ {x:,.0f}" if pd.notnull(x) and isinstance(x, (int, float)) else x)
+    cap_df.index = range(1, len(cap_df) + 1)
     st.dataframe(cap_df, use_container_width=True)
 
 # 4. 明細表
