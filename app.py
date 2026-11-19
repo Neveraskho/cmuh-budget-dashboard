@@ -289,19 +289,16 @@ def generate_pdf_report_bytes(
         ax_f_main = fig2.add_axes([0.045, 0.34, 0.20, 0.34], zorder=2)
         draw_donut_ax(ax_f_main, "經常門總體核銷", freq_spent, freq_budget, "#10B981", fp, title_size=11, center_size=16, show_amounts=True, amount_size=7.5)
 
-        # 第 1 排：人事費 3 項
         fig2.text(0.275, 0.775, "人事費（3 項）", fontsize=9.5, fontweight="bold", color="#047857", fontproperties=fp, zorder=5)
         for idx, (name, sp, bg, col) in enumerate(freq_row1):
             ax_sub = fig2.add_axes([0.275 + idx * 0.22, 0.605, 0.145, 0.135], zorder=2)
             draw_donut_ax(ax_sub, name, sp, bg, col, fp, title_size=8.8, center_size=10.5, show_amounts=True, amount_size=6.5, show_sublabel=False)
 
-        # 第 2 排：四大租金 4 項
         fig2.text(0.275, 0.525, "業務費 — 四大租金專案（4 項）", fontsize=9.5, fontweight="bold", color="#0F766E", fontproperties=fp, zorder=5)
         for idx, (name, sp, bg, col) in enumerate(freq_row2):
             ax_sub = fig2.add_axes([0.27 + idx * 0.172, 0.355, 0.138, 0.135], zorder=2)
             draw_donut_ax(ax_sub, name, sp, bg, col, fp, title_size=8.8, center_size=10.5, show_amounts=True, amount_size=6.5, show_sublabel=False)
 
-        # 第 3 排：業務費六大細項（餐費、雜支費、文具紙張、印刷、出席費、國內旅費）
         fig2.text(0.275, 0.275, "業務費 — 各細項（6 項）", fontsize=9.5, fontweight="bold", color="#0369A1", fontproperties=fp, zorder=5)
         for idx, (name, sp, bg, col) in enumerate(freq_row3):
             ax_sub = fig2.add_axes([0.265 + idx * 0.115, 0.115, 0.102, 0.125], zorder=2)
@@ -317,7 +314,7 @@ def generate_pdf_report_bytes(
         add_page_header(
             fig3, fp,
             "範疇一計畫經費執行與核銷進度報表 — 資本門",
-            "健康台灣深耕計畫｜第 3 頁：資本門總體與 6 大系統／設備採購核銷進度總覽",
+            "健康台灣深耕計畫｜第 3 頁：資本門總體與系統／設備採購核銷進度總覽",
             now_str
         )
 
@@ -327,7 +324,7 @@ def generate_pdf_report_bytes(
             facecolor="white", edgecolor="#E2E8F0", linewidth=1, transform=fig3.transFigure, zorder=-1
         )
         fig3.patches.append(cap_card)
-        fig3.text(0.05, 0.832, "一、資本門總體與 6 大系統採購核銷比例", fontsize=12, fontweight="bold", color="#0F172A", fontproperties=fp, zorder=5)
+        fig3.text(0.05, 0.832, "一、資本門總體與設備／系統採購核銷比例", fontsize=12, fontweight="bold", color="#0F172A", fontproperties=fp, zorder=5)
 
         ax_c_main = fig3.add_axes([0.05, 0.33, 0.24, 0.35], zorder=2)
         draw_donut_ax(ax_c_main, "資本門總體核銷", cap_spent, cap_budget, "#3B82F6", fp, title_size=11.5, center_size=17, show_amounts=True, amount_size=7.8)
@@ -381,17 +378,17 @@ bonus_exec_budget_100 = 15133300.0
 personnel_full_budget = ra_budget_100 + bonus_retain_budget_100 + bonus_exec_budget_100
 personnel_spent_100 = personnel_full_budget
 
-# 動態計算資本門各項目已核銷金額（從 df_capital 抓取）
+# 動態計算資本門各項目已核銷金額（從 df_capital 抓取，排除已刪除之 ERP）
 cap_df_raw = df_capital.iloc[1:12, [1, 2, 5]].copy()
 cap_df_raw.columns = ['發票號碼', '品名', '總計']
 cap_df_raw['總計'] = pd.to_numeric(cap_df_raw['總計'], errors='coerce').fillna(0)
+cap_df_raw = cap_df_raw[~cap_df_raw['品名'].astype(str).str.contains('ERP', na=False)]
 
 ai_spent = cap_df_raw[cap_df_raw['品名'].astype(str).str.contains('AI排班', na=False)]['總計'].sum()
 loc_spent = cap_df_raw[cap_df_raw['品名'].astype(str).str.contains('定位系統|定位點班', na=False)]['總計'].sum()
 ilisten_spent = cap_df_raw[cap_df_raw['品名'].astype(str).str.contains('iListen|數位化溝通平台', na=False)]['總計'].sum()
 scanner_spent = cap_df_raw[cap_df_raw['品名'].astype(str).str.contains('掃描機', na=False)]['總計'].sum()
 scale_spent = cap_df_raw[cap_df_raw['品名'].astype(str).str.contains('磅秤', na=False)]['總計'].sum()
-erp_spent = cap_df_raw[cap_df_raw['品名'].astype(str).str.contains('ERP', na=False)]['總計'].sum()
 
 total_cap_spent = cap_df_raw['總計'].sum()
 
@@ -418,16 +415,16 @@ biz_budget_dict = {
     '國內旅費': 4200.0,
 }
 
-# 彙總數據供畫面與 PDF 報表共用
+# 彙總數據供畫面與 PDF 報表共用（資本門與總經費已扣除 ERP NT$ 8,000,000）
 p_spent = personnel_spent_100
 b_spent = sum(biz_budget_dict.values()) + total_rent_spent
 c_spent = total_cap_spent
 total_spent_all = p_spent + b_spent + c_spent
-total_budget_all = 85447167.00
+cap_budget_all = 10271539.0
+total_budget_all = 77447167.00
 
 freq_budget_all = 48124541.0 + 19051087.48
 freq_spent_all = p_spent + b_spent
-cap_budget_all = 18271539.0
 
 # 三種（人事費 / 四大租金 / 業務費細項）各自依執行率由高到低（100% -> 0%）排序
 freq_row1_items = sort_items_by_pct_desc([
@@ -454,13 +451,12 @@ cap_sub_items = [
     ("iListen員工脈動平台", ilisten_spent, 720000.0, '#2563EB'),
     ("全自動掃描機", scanner_spent, 3281539.0, '#3B82F6'),
     ("智能磅秤", scale_spent, 740000.0, '#60A5FA'),
-    ("ERP系統", erp_spent, 8000000.0, '#2563EB'),
 ]
 
 summary_table_rows = [
     ["人事費 (經常門)", "NT$ 48,124,541", f"NT$ {p_spent:,.0f}", f"NT$ {48124541 - p_spent:,.0f}", "100.00%"],
     ["業務費與租金 (經常門)", "NT$ 19,051,087", f"NT$ {b_spent:,.0f}", f"NT$ {19051087.48 - b_spent:,.0f}", f"{(b_spent / 19051087.48 * 100):.2f}%"],
-    ["資本門", "NT$ 18,271,539", f"NT$ {c_spent:,.0f}", f"NT$ {18271539 - c_spent:,.0f}", f"{(c_spent / 18271539 * 100):.2f}%"],
+    ["資本門", f"NT$ {cap_budget_all:,.0f}", f"NT$ {c_spent:,.0f}", f"NT$ {cap_budget_all - c_spent:,.0f}", f"{(c_spent / cap_budget_all * 100):.2f}%"],
     ["範疇一總經費合計", f"NT$ {total_budget_all:,.0f}", f"NT$ {total_spent_all:,.0f}", f"NT$ {total_budget_all - total_spent_all:,.0f}", f"{(total_spent_all / total_budget_all * 100):.2f}%"],
 ]
 
@@ -516,7 +512,7 @@ if menu == "📌 總體經費摘要與支用比例":
             {'經費門類': '人事費 (經常門)', '項目': '已支用/核銷金額', '金額': p_spent},
             {'經費門類': '業務費與租金 (經常門)', '項目': '預算金額', '金額': 19051087.48},
             {'經費門類': '業務費與租金 (經常門)', '項目': '已支用/核銷金額', '金額': b_spent},
-            {'經費門類': '資本門', '項目': '預算金額', '金額': 18271539.00},
+            {'經費門類': '資本門', '項目': '預算金額', '金額': cap_budget_all},
             {'經費門類': '資本門', '項目': '已支用/核銷金額', '金額': c_spent},
         ])
         fig_bar = px.bar(
@@ -606,10 +602,10 @@ if menu == "📌 總體經費摘要與支用比例":
       </tr>
       <tr>
         <td>資本門</td>
-        <td>NT$ 18,271,539</td>
+        <td>NT$ {cap_budget_all:,.0f}</td>
         <td>NT$ {c_spent:,.0f}</td>
-        <td>NT$ {18271539 - c_spent:,.0f}</td>
-        <td>{(c_spent / 18271539 * 100):.2f}%</td>
+        <td>NT$ {cap_budget_all - c_spent:,.0f}</td>
+        <td>{(c_spent / cap_budget_all * 100):.2f}%</td>
       </tr>
       <tr class="total-row">
         <td>📌 範疇一總經費合計</td>
@@ -813,7 +809,7 @@ elif menu == "🏢 資本門統計":
                 )
 
         r2 = st.columns(3)
-        for idx in range(3, 6):
+        for idx in range(3, len(cap_sub_items)):
             title, sp, bg, col = cap_sub_items[idx]
             with r2[idx - 3]:
                 st.plotly_chart(
@@ -823,7 +819,7 @@ elif menu == "🏢 資本門統計":
 
     render_pie_bottom_right_time(now_tw)
     st.markdown("---")
-    st.subheader("📋 一、資本門 6 大合併項目核銷進度清單")
+    st.subheader("📋 一、資本門合併項目核銷進度清單")
 
     capital_tracking_data = [
         ["AI排班與加班預測系統", 3570000.0, ai_spent, "包含30%簽約金、第一、二階段及第三階段(尾款)"],
@@ -831,7 +827,6 @@ elif menu == "🏢 資本門統計":
         ["iListen員工脈動平台", 720000.0, ilisten_spent, "包含30%簽約與70%尾款（已核銷平台建置費）"],
         ["全自動掃描機", 3281539.0, scanner_spent, "數位病理專案所需（剩餘款由本院自籌）"],
         ["智能磅秤", 740000.0, scale_spent, "擴大科技投資降低工作負荷-智慧量測系統（50個）"],
-        ["ERP系統", 8000000.0, erp_spent, "企業資源規劃系統：ERP系統"]
     ]
 
     cap_stats = []
@@ -855,6 +850,7 @@ elif menu == "🏢 資本門統計":
     st.subheader("📄 二、資本門原始發票與核銷流水明細")
     cap_df = df_capital.iloc[1:12, [0, 1, 2, 3, 4, 5, 6, 7, 8]].copy()
     cap_df.columns = ['發票開立日期', '發票號碼', '品名', '數量', '單價', '總計(含稅)', '核銷單列印日期', '核銷案號', '說明/備註']
+    cap_df = cap_df[~cap_df['品名'].astype(str).str.contains('ERP', na=False)]
     cap_df['總計(含稅)'] = cap_df['總計(含稅)'].apply(lambda x: f"NT$ {x:,.0f}" if pd.notnull(x) and isinstance(x, (int, float)) else x)
     cap_df.index = range(1, len(cap_df) + 1)
     st.dataframe(cap_df, use_container_width=True)
